@@ -1,0 +1,41 @@
+# -*- makefile -*-
+
+# starch generated makefile fragment. do not edit.
+# 
+# This makefile is designed to be included in a surrounding makefile. The including makefile
+# should set $(STARCH_COMPILE) to a (partial) command line that provides suitable cflags etc
+# and handles the following appended things:
+#   * an C source filename to compile to the corresponding .o file
+#   * a -o option to specify the output object file
+#   * additional command-line arguments to set compile flags as defined in each flavor
+#
+# Including the makefile fragment provides these variables/rules:
+#
+#  $(STARCH_CFLAGS): additional cflags that may be used when compiling other code that uses starch.h
+#    (not required - if omitted, the only change is that flavor-specific prototypes are unavailable)
+#  $(STARCH_OBJS): a list of object files to link to the main binary
+#  explicit build rules for each object file listed in $(STARCH_OBJS)
+
+STARCH_CFLAGS := -D${mix.macro}
+<%
+   import os
+   o_files = []
+%>
+% for flavor in mix.flavors:
+<%
+   c_file = gen.generated_flavor_pattern.format(flavor.name)
+   o_file = os.path.splitext(c_file)[0] + '.o'
+   o_files.append(o_file)
+%>
+${o_file}: ${c_file}
+	$(STARCH_COMPILE) ${flavor.cflags} ${c_file} -o ${o_file}
+% endfor
+<%
+   c_file = gen.generated_dispatcher_path
+   o_file = os.path.splitext(c_file)[0] + '.o'
+   o_files.append(o_file)
+ %>
+${o_file}: ${c_file}
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o ${o_file}
+
+STARCH_OBJS := ${' '.join(o_files)}
