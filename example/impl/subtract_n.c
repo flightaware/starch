@@ -1,10 +1,3 @@
-#include <stdint.h>
-
-#ifndef STARCH_IMPL
-#define STARCH_IMPL(a,b) starchimpl_ ## a ## _ ## b
-#define STARCH_IMPL_REQUIRES(a,b,c) starchimpl_ ## a ## _ ## b
-#endif
-
 void STARCH_IMPL(subtract_n, generic) (const uint16_t *in, unsigned len, uint16_t n, uint16_t *out)
 {
     const uint16_t * restrict in_align = __builtin_assume_aligned(in, 16);

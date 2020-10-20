@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS = -O3 -Wall -g -fopt-info-vec
+CFLAGS = -O3 -Wall -g
 
 STARCH_COMPILE := $(CC) $(CFLAGS) -c
 
