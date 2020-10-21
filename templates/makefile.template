@@ -14,6 +14,7 @@
 #  $(STARCH_CFLAGS): additional cflags that may be used when compiling other code that uses starch.h
 #    (not required - if omitted, the only change is that flavor-specific prototypes are unavailable)
 #  $(STARCH_OBJS): a list of object files to link to the main binary
+#  $(STARCH_BENCHMARK_OBJ): object files providing a standalone benchmarking app (link all of $(STARCH_OBJS) too)
 #  explicit build rules for each object file listed in $(STARCH_OBJS)
 
 STARCH_CFLAGS := -D${mix.macro}
@@ -39,3 +40,12 @@ ${o_file}: ${c_file}
 	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o ${o_file}
 
 STARCH_OBJS := ${' '.join(o_files)}
+
+<%
+   c_file = gen.generated_benchmark_path
+   o_file = os.path.splitext(c_file)[0] + '.o'
+ %>
+${o_file}: ${c_file}
+	$(STARCH_COMPILE) ${c_file} -o ${o_file}
+
+STARCH_BENCHMARK_OBJ := ${o_file}

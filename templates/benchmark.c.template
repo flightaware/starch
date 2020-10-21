@@ -1,0 +1,75 @@
+/* starch generated code. Do not edit. */
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <time.h>
+
+#include "${os.path.relpath(gen.generated_include_path, target_dir)}"
+
+const unsigned starch_benchmark_warmup_loops = 10;
+const unsigned starch_benchmark_loops = 100000;
+
+typedef struct timespec starch_benchmark_time;
+inline void starch_benchmark_get_time(starch_benchmark_time *t)
+{
+    clock_gettime(CLOCK_MONOTONIC, t);
+}
+
+uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end)
+{
+    return ((uint64_t)end->tv_sec - (uint64_t)start->tv_sec) * 1000000000U + (uint64_t)end->tv_nsec - (uint64_t)start->tv_nsec;
+}
+
+#define STARCH_SYMBOL(_name) ${gen.symbol_prefix} ## _name ## _benchmark_sym
+#define STARCH_IMPL(_function,_impl) ${gen.symbol_prefix} ## _function ## _ ## _impl ## _dummy
+#define STARCH_IMPL_REQUIRES(_function,_impl,_feature) STARCH_IMPL(_function,_impl)
+#define STARCH_BENCHMARK(_function) ${gen.symbol_prefix} ## _function ## _benchmark
+
+#define STARCH_BENCHMARK_LOOP(_function, _callargs, _timing)            \
+    do {                                                                \
+        /* warmup */                                                    \
+        for (unsigned _loop = 0; _loop < starch_benchmark_warmup_loops; ++_loop) \
+            _function _callargs;                                        \
+        /* benchmark */                                                 \
+        starch_benchmark_time start, end;                               \
+        starch_benchmark_get_time(&start);                              \
+        clock_gettime(CLOCK_MONOTONIC, &start);                         \
+        for (unsigned _loop = 0; _loop < starch_benchmark_loops; ++_loop) \
+            _function _callargs;                                        \
+        starch_benchmark_get_time(&end);                                \
+        (_timing) = starch_benchmark_elapsed(&start, &end);             \
+    } while(0)
+
+% for source in gen.source_files:
+#include "${os.path.relpath(source.path, target_dir)}"
+% endfor
+
+<% functions_to_benchmark = [f for f in gen.functions.values() if f.has_benchmark] %>
+% for function in functions_to_benchmark:
+void starch_benchmark_all_${function.name}(void)
+{
+    fprintf(stderr, "==== ${function.name} ====\n");
+    
+    for (${function.regentry_type} *entry = ${function.registry_symbol}; entry->name; ++entry) {
+        if (entry->flavor_supported && !(entry->flavor_supported())) {
+            fprintf(stderr, "  %-40.40s   unsupported\n", entry->name);
+            continue;
+        }
+
+        ${function.callable_symbol} = entry->callable;
+        uint64_t elapsed = STARCH_BENCHMARK(${function.name}) ();
+        uint64_t per_loop = elapsed / starch_benchmark_loops;
+        fprintf(stderr, "  %-40.40s   %" PRIu64 " ns/call\n", entry->name, per_loop);
+    }
+}
+% endfor
+
+int main(int argc, char **argv)
+{
+% for function in functions_to_benchmark:
+    starch_benchmark_all_${function.name}();
+% endfor
+}
+

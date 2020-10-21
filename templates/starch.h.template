@@ -23,6 +23,7 @@ typedef ${function.returntype} (* ${function.pointer_type}) ( ${function.declara
 extern ${function.pointer_type} ${function.callable_symbol};
 
 typedef struct {
+    int rank;
     const char *name;
     ${function.pointer_type} callable;
     int (*flavor_supported)();
@@ -30,6 +31,7 @@ typedef struct {
 
 extern ${function.regentry_type} ${function.registry_symbol}[];
 ${function.regentry_type} * ${function.select_symbol}();
+void ${function.set_wisdom_symbol}( const char * const * received_wisdom );
 
 % endfor
 /* flavors and prototypes */

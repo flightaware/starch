@@ -1,4 +1,3 @@
-<%! import os %>
 /* starch generated code. Do not edit. */
 
 #define ${flavor.macro}
@@ -6,8 +5,8 @@
 #define ${feature.macro}
 % endfor
 
-#define STARCH_SYMBOL(_name) ${gen.symbol_prefix} ## _name ## ${flavor.symbol_suffix}
-#define STARCH_IMPL(_function,_impl) ${gen.symbol_prefix} ## _function ## _ ## _impl ## ${flavor.symbol_suffix}
+#define STARCH_SYMBOL(_name) ${gen.symbol_prefix} ## _name ## _ ## ${flavor.name}
+#define STARCH_IMPL(_function,_impl) ${gen.symbol_prefix} ## _function ## _ ## _impl ## _ ## ${flavor.name}
 #define STARCH_IMPL_REQUIRES(_function,_impl,_feature) STARCH_IMPL(_function,_impl)
 
 #include "${os.path.relpath(gen.generated_include_path, target_dir)}"

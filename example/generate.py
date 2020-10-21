@@ -7,22 +7,24 @@ gen = starch.Generator(base_dir='.',
 
 gen.add_include('<stdint.h>')
 
+gen.add_function(name = 'subtract_n', argtypes = ['const uint16_t *', 'unsigned', 'uint16_t', 'uint16_t *'])
+
 gen.add_feature(name='neon',
                 description='ARM NEON v2')
 
 gen.add_flavor(name = 'generic',
                description = 'Generic build, default compiler options',
                compile_flags = [])
-gen.add_flavor(name = 'armv7a',
-               description = 'ARMv7-A with NEON',
+gen.add_flavor(name = 'armv7a_vfpv3',
+               description = 'ARMv7-A, NEON, VFPv3',
+               compile_flags = ['-march=armv7-a+neon-vfpv3', '-mfpu=neon-vfpv3', '-ffast-math'],
+               features = ['neon'],
+               test_function = 'supports_neon_vfpv3')
+gen.add_flavor(name = 'armv7a_vfpv4',
+               description = 'ARMv7-A, NEON, VFPv4',
                compile_flags = ['-march=armv7-a+neon-vfpv4', '-mfpu=neon-vfpv4', '-ffast-math'],
                features = ['neon'],
-               test_function = 'supports_armv7a_neon')
-gen.add_flavor(name = 'armv8a',
-               description = 'ARMv8-A with NEON',
-               compile_flags = ['-march=armv8-a+simd', '-mfpu=neon-fp-armv8', '-ffast-math'],
-               features = ['neon'],
-               test_function = 'supports_armv8a_neon')
+               test_function = 'supports_neon_vfpv4')
 gen.add_flavor(name = 'x86_64_avx',
                description = 'x86-64 with AVX',
                compile_flags = ['-mavx', '-ffast-math'],
@@ -35,18 +37,21 @@ gen.add_flavor(name = 'x86_64_avx2',
                test_function = 'supports_x86_avx2')
 
 gen.add_mix(name = 'generic',
-            description = 'Generic build, no specific architecture',
+            description = 'Generic build, compiler defaults only',
             flavors = ['generic'])
 
 gen.add_mix(name = 'arm',
-            description = 'ARM 32-bit build',
-            flavors = ['armv8a', 'armv7a', 'generic'])
-
+            description = 'ARM',
+            flavors = ['armv7a_vfpv4', 'armv7a_vfpv3', 'generic'],
+            wisdom = {
+                'subtract_n': ['neon_intrinsics_armv7a_vfpv4', 'neon_intrinsics_armv7a_vfpv3', 'generic_generic']
+            })
 gen.add_mix(name = 'x86_64',
-            description = 'x64-64 build',
-            flavors = ['x86_64_avx2', 'x86_64_avx', 'generic'])
-
-gen.add_function(name = 'subtract_n', argtypes = ['const uint16_t *', 'unsigned', 'uint16_t', 'uint16_t *'])
+            description = 'x64-64',
+            flavors = ['x86_64_avx2', 'x86_64_avx', 'generic'],
+            wisdom = {
+                'subtract_n': ['generic_x86_64_avx2', 'generic_x86_64_avx', 'unroll_4_generic']
+            })
 
 gen.scan_file('impl/subtract_n.c')
 gen.generate()

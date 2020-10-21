@@ -75,3 +75,30 @@ void STARCH_IMPL_REQUIRES(subtract_n, neon_intrinsics, STARCH_FEATURE_NEON) (con
 }
 
 #endif
+
+
+#ifdef STARCH_BENCHMARK
+
+#include <stdlib.h>
+
+uint64_t STARCH_BENCHMARK(subtract_n) (void)
+{
+    uint16_t *in = NULL, *out = NULL;
+    const unsigned len = 65536;
+    const unsigned n = 42;
+    uint64_t timing = 0;
+
+    if (!(in = aligned_alloc(16, len * sizeof(uint16_t))) || !(out = aligned_alloc(16, len * sizeof(uint16_t)))) {
+        perror("aligned_alloc");
+        goto done;
+    }
+
+    STARCH_BENCHMARK_LOOP( subtract_n, (in, len, n, out), timing );
+
+ done:
+    free(in);
+    free(out);
+    return timing;
+}
+
+#endif

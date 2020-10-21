@@ -1,22 +1,34 @@
-<%! import os %>
 /* starch generated code. Do not edit. */
 
 #include <stdlib.h>
+#include <string.h>
+
 #include "${os.path.relpath(gen.generated_include_path, target_dir)}"
+
+/* helper for re-sorting registries */
+struct starch_regentry_prefix {
+    int rank;
+};
+
+static int starch_regentry_rank_compare (const void *l, const void *r)
+{
+    const struct starch_regentry_prefix *left = l, *right = r;
+    return left->rank - right->rank;
+}
 
 % for function in gen.functions.values():
 /* dispatcher / registry for ${function.name} */
 
 ${function.regentry_type} * ${function.select_symbol}() {
-   for (${function.regentry_type} *entry = ${function.registry_symbol};
-        entry->name;
-        ++entry)
-   {
-       if (entry->flavor_supported && !(entry->flavor_supported()))
-           continue;
-       return entry;
-   }
-   return NULL;
+    for (${function.regentry_type} *entry = ${function.registry_symbol};
+         entry->name;
+         ++entry)
+    {
+        if (entry->flavor_supported && !(entry->flavor_supported()))
+            continue;
+        return entry;
+    }
+    return NULL;
 }
 
 ${function.returntype} ${function.dispatcher_symbol} ( ${function.declaration_arglist} ) {
@@ -34,19 +46,54 @@ ${function.returntype} ${function.dispatcher_symbol} ( ${function.declaration_ar
 
 ${function.pointer_type} ${function.callable_symbol} = ${function.dispatcher_symbol};
 
+void ${function.set_wisdom_symbol} (const char * const * received_wisdom)
+{
+    /* re-rank the registry based on received wisdom */
+    ${function.regentry_type} *entry;
+    for (entry = ${function.registry_symbol}; entry->name; ++entry) {
+        const char * const *search;
+        for (search = received_wisdom; *search; ++search) {
+            if (!strcmp(*search, entry->name)) {
+                break;
+            }
+        }
+        if (*search) {
+            /* matches an entry in the wisdom list, order by position in the list */
+            entry->rank = search - received_wisdom;
+        } else {
+            /* no match, rank after all possible matches, retaining existing order */
+            entry->rank = (search - received_wisdom) + (entry - ${function.registry_symbol});
+        }
+    }
+
+    /* re-sort based on the new ranking */
+    qsort(${function.registry_symbol}, entry - ${function.registry_symbol}, sizeof(${function.regentry_type}), starch_regentry_rank_compare);
+
+    /* reset the implementation pointer so the next call will re-select */
+    ${function.callable_symbol} = ${function.dispatcher_symbol};
+}
+
 ${function.regentry_type} ${function.registry_symbol}[] = {
- % for mix in gen.mixes.values():
+% for mix in gen.mixes.values():
+  <%
+    # gather all implementations for this mix, sort by wisdom
+    def rank_key(value, wisdom=mix.function_wisdom(function)):
+      impl, flavor = value
+      try:
+        return wisdom.index(impl.wisdom_name(flavor))
+      except ValueError:
+        return len(wisdom)
+
+    mix_impls = [(impl,flavor) for flavor in mix.flavors for impl in function.impls if (impl.feature is None or impl.feature in flavor.features)]
+    mix_impls.sort(key=rank_key)
+  %>
 #ifdef ${mix.macro}
-  % for flavor in mix.flavors:
-    % for impl in function.impls:
-      % if impl.feature is None or impl.feature in flavor.features:
-    { "${impl.name}_${flavor.name}", ${impl.impl_symbol(flavor)}, ${flavor.test_function_expr} },
-      % endif
-    % endfor
+  % for rank, (impl, flavor) in enumerate(mix_impls):
+    { ${rank}, "${impl.wisdom_name(flavor)}", ${impl.impl_symbol(flavor)}, ${flavor.test_function_expr} },
   % endfor
 #endif /* ${mix.macro} */
 % endfor
-    { NULL, NULL, NULL }
+    { 0, NULL, NULL, NULL }
 };
 
 % endfor

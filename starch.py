@@ -75,10 +75,6 @@ intrinsics)"""
         self.test_function = test_function
 
     @property
-    def symbol_suffix(self) -> str:
-        return '_' + self.name
-        
-    @property
     def macro(self) -> str:
         return 'STARCH_FLAVOR_' + self.name.upper()
 
@@ -105,6 +101,7 @@ support."""
     argtypes: Sequence[str]
     argnames: Sequence[str]
     impls: Collection['FunctionImpl'] = []
+    has_benchmark: bool = False
 
     def __init__(self,
                  gen: 'Generator',
@@ -158,7 +155,11 @@ support."""
     def registry_symbol(self):
         return self.gen.sym(self.name + '_registry')
 
-    
+    @property
+    def set_wisdom_symbol(self):
+        return self.gen.sym(self.name + '_set_wisdom')
+
+
 class FunctionImpl(object):
     """A possible implementation of a function, not built in any particular way yet."""
 
@@ -183,8 +184,11 @@ class FunctionImpl(object):
         self.source = source
         self.lineno = lineno
 
+    def wisdom_name(self, flavor) -> str:
+        return self.name + '_' + flavor.name
+
     def impl_symbol(self, flavor) -> str:
-        return self.gen.sym(self.function.name + '_' + self.name + flavor.symbol_suffix)
+        return self.gen.sym(self.function.name + '_' + self.name + '_' + flavor.name)
 
 
 class SourceFile(object):
@@ -211,18 +215,24 @@ specified first."""
     name: str
     description: str
     flavors: Collection[BuildFlavor]
+    wisdom: Mapping[Function,Collection[str]]
 
     def __init__(self,
                  name: str,
                  description: str,
-                 flavors: Collection[BuildFlavor]):
+                 flavors: Collection[BuildFlavor],
+                 wisdom: Mapping[Function,Collection[str]] = {}):
         self.name = name
         self.description = description
         self.flavors = list(flavors)
+        self.wisdom = wisdom
 
     @property
     def macro(self):
         return 'STARCH_MIX_' + self.name.upper()
+
+    def function_wisdom(self, function) -> Collection[str]:
+        return self.wisdom.get(function, [])
 
 class Generator(object):
     functions: Mapping[str, Function] = {}
@@ -237,6 +247,7 @@ class Generator(object):
     generated_include_path: str
     generated_flavor_pattern: str
     generated_dispatcher_path: str
+    generated_benchmark_path: str
     generated_makefile_pattern: str
     includes: Collection[str] = []
 
@@ -247,6 +258,7 @@ class Generator(object):
                  generated_include_path: str = 'include/starch.h',
                  generated_flavor_pattern: str = 'src/flavor.{0}.c',
                  generated_dispatcher_path: str = 'src/dispatcher.c',
+                 generated_benchmark_path: str = 'src/benchmark.c',
                  generated_makefile_pattern: str = 'src/makefile.{0}',
                  symbol_prefix: str = 'starch_'):
         self.base_dir = base_dir
@@ -257,15 +269,18 @@ class Generator(object):
             raise ValueError(f'generated_flavor_pattern must be a relative path')
         if os.path.isabs(generated_dispatcher_path):
             raise ValueError(f'generated_dispatcher_path must be a relative path')
+        if os.path.isabs(generated_benchmark_path):
+            raise ValueError(f'generated_benchmark_path must be a relative path')
         if os.path.isabs(generated_makefile_pattern.format('dummy')):
             raise ValueError(f'generated_makefile_pattern must be a relative path')
 
         self.generated_include_path = generated_include_path
         self.generated_flavor_pattern = generated_flavor_pattern
         self.generated_dispatcher_path = generated_dispatcher_path
+        self.generated_benchmark_path = generated_benchmark_path
         self.generated_makefile_pattern = generated_makefile_pattern        
         self.symbol_prefix = symbol_prefix
-        self.templates = mako.lookup.TemplateLookup(directories = [template_dir], module_directory = mako_dir)
+        self.templates = mako.lookup.TemplateLookup(directories = [template_dir], module_directory = mako_dir, imports=['import os'])
 
     def add_include(self, what):
         if what[0] == '<':
@@ -322,12 +337,14 @@ class Generator(object):
     def add_mix(self,
                 name: str,
                 description: str,
-                flavors: Collection[Union[BuildFlavor,str]]):
+                flavors: Collection[Union[BuildFlavor,str]],
+                wisdom: Mapping[Union[Function,str],Collection[str]] = {}):
         if name in self.mixes:
             raise RuntimeError('duplicated mix: ' + name)
 
         resolved_flavors = map(self.get_flavor, flavors)
-        self.mixes[name] = BuildMix(name, description, resolved_flavors)
+        resolved_wisdom = dict( (self.get_function(name), values) for name,values in wisdom.items() )
+        self.mixes[name] = BuildMix(name, description, resolved_flavors, resolved_wisdom)
 
     def sym(self, symbol: str) -> str:
         return self.symbol_prefix + symbol    
@@ -383,6 +400,10 @@ class Generator(object):
                                              ([a-zA-Z0-9_]+) \s* \)                              # feature name
                                           ''', re.VERBOSE)
 
+        match_benchmark = re.compile(r'''[^a-zA-Z0-9_]+ STARCH_BENCHMARK \s* \( \s*      # macro call
+                                         ([a-zA-Z0-9_]+) \s* \)                          # function name
+                                      ''', re.VERBOSE)
+
         with open(os.path.join(self.base_dir, rel_path), 'r') as f:
             for lineno, line in enumerate(f):
                 if line[0] == '#':
@@ -397,6 +418,13 @@ class Generator(object):
                     impl = self.build_impl(source, lineno, match.group(1), match.group(2), match.group(3))
                     if impl:
                         self.add_impl(impl)
+
+                for match in match_benchmark.finditer(line):
+                    function_name = match.group(1)
+                    if function_name in self.functions:
+                        self.functions[function_name].has_benchmark = True
+                    else:
+                        self.warning(source, lineno, f"benchmark defined for unknown function {function_name}, ignored")
 
     def render(self, template_path, rel_file_path, **kwargs):
         t = self.templates.get_template(template_path)
@@ -414,6 +442,7 @@ class Generator(object):
             self.render('/flavor.c.template', self.generated_flavor_pattern.format(name), flavor=flavor)
 
         self.render('/dispatcher.c.template', self.generated_dispatcher_path)
+        self.render('/benchmark.c.template', self.generated_benchmark_path)
 
         for name, mix in self.mixes.items():
             self.render('/makefile.template', self.generated_makefile_pattern.format(name), mix=mix)
