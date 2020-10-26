@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 
+import sys
+import os
+
+example_dir = os.path.dirname(sys.argv[0])
+starch_dir = os.path.join(example_dir, '..')
+sys.path.append(starch_dir)
 import starch
 
-gen = starch.Generator(base_dir='.',
-                       template_dir='../templates')
+gen = starch.Generator(runtime_dir = example_dir,
+                       output_dir = os.path.join(example_dir, 'generated'))
 
 gen.add_include('<stdint.h>')
 
