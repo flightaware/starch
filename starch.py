@@ -430,6 +430,8 @@ class Generator(object):
                 for match in match_benchmark.finditer(line):
                     function_name = match.group(1)
                     if function_name in self.functions:
+                        if self.functions[function_name].has_benchmark:
+                            self.warning(source, lineno, f"duplicate benchmark defined for unknown function {function_name}")
                         self.functions[function_name].has_benchmark = True
                     else:
                         self.warning(source, lineno, f"benchmark defined for unknown function {function_name}, ignored")
