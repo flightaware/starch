@@ -14,7 +14,11 @@ const unsigned starch_benchmark_loops = 100000;
 typedef struct timespec starch_benchmark_time;
 inline void starch_benchmark_get_time(starch_benchmark_time *t)
 {
+#ifdef CLOCK_THREAD_CPUTIME_ID
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, t);
+#else
     clock_gettime(CLOCK_MONOTONIC, t);
+#endif
 }
 
 uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end)
