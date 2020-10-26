@@ -21,6 +21,7 @@ STARCH_CFLAGS := -D${mix.macro}
 <%
    import os
    o_files = []
+   impl_c_files = ' '.join( map(lambda x, gen=gen: os.path.relpath(x.path, gen.runtime_dir), gen.source_files) )
 %>
 % for flavor in mix.flavors:
 <%
@@ -28,7 +29,7 @@ STARCH_CFLAGS := -D${mix.macro}
    o_file = os.path.splitext(c_file)[0] + '.o'
    o_files.append(o_file)
 %>
-${o_file}: ${c_file}
+${o_file}: ${c_file} ${impl_c_files}
 	$(STARCH_COMPILE) ${flavor.cflags} ${c_file} -o ${o_file}
 % endfor
 <%
@@ -36,7 +37,7 @@ ${o_file}: ${c_file}
    o_file = os.path.splitext(c_file)[0] + '.o'
    o_files.append(o_file)
  %>
-${o_file}: ${c_file}
+${o_file}: ${c_file} ${impl_c_files}
 	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o ${o_file}
 
 STARCH_OBJS := ${' '.join(o_files)}
@@ -45,7 +46,7 @@ STARCH_OBJS := ${' '.join(o_files)}
    c_file = os.path.relpath(gen.generated_benchmark_path, gen.runtime_dir)
    o_file = os.path.splitext(c_file)[0] + '.o'
  %>
-${o_file}: ${c_file}
+${o_file}: ${c_file} ${impl_c_files}
 	$(STARCH_COMPILE) ${c_file} -o ${o_file}
 
 STARCH_BENCHMARK_OBJ := ${o_file}
