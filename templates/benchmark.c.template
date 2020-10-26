@@ -8,7 +8,7 @@
 
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
-const unsigned starch_benchmark_warmup_loops = 10;
+const unsigned starch_benchmark_warmup_loops = 100;
 const unsigned starch_benchmark_loops = 100000;
 
 typedef struct timespec starch_benchmark_time;
