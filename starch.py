@@ -126,8 +126,10 @@ support."""
 
     @property
     def callable_symbol(self) -> str:
-        # nb: no prefix!
-        return self.name
+        if self.gen.prefix_function_symbols:
+            return self.gen.sym(self.name)
+        else:
+            return self.name
 
     @property
     def select_symbol(self) -> str:
@@ -256,7 +258,8 @@ class Generator(object):
                  generated_dispatcher_path: str = 'dispatcher.c',
                  generated_benchmark_path: str = 'benchmark.c',
                  generated_makefile_pattern: str = 'makefile.{0}',
-                 symbol_prefix: str = 'starch_'):
+                 symbol_prefix: str = 'starch_',
+                 prefix_function_symbols: bool = True):
         self.runtime_dir = runtime_dir
         self.output_dir = output_dir
         self.generated_include_path = os.path.join(output_dir, generated_include_path)
@@ -265,6 +268,7 @@ class Generator(object):
         self.generated_benchmark_path = os.path.join(output_dir, generated_benchmark_path)
         self.generated_makefile_pattern = generated_makefile_pattern
         self.symbol_prefix = symbol_prefix
+        self.prefix_function_symbols = prefix_function_symbols
 
         if template_dir is None and '__file__' in globals():
             template_dir = os.path.join(os.path.dirname(__file__), 'templates')
