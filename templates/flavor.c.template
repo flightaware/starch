@@ -9,10 +9,10 @@
 #define STARCH_IMPL(_function,_impl) ${gen.symbol_prefix} ## _function ## _ ## _impl ## _ ## ${flavor.name}
 #define STARCH_IMPL_REQUIRES(_function,_impl,_feature) STARCH_IMPL(_function,_impl)
 
-#include "${os.path.relpath(gen.generated_include_path, target_dir)}"
+#include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
 % for source in gen.source_files:
   % if any((impl.feature is None or impl.feature in flavor.features) for impl in source.impls):
-#include "${os.path.relpath(source.path, target_dir)}"
+#include "${os.path.relpath(source.path, current_dir)}"
   % endif
 % endfor

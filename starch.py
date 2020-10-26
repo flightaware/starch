@@ -5,7 +5,7 @@ import re
 import os
 import mako.lookup
 
-from typing import Optional, Sequence, Collection, Mapping, Union
+from typing import Optional, Union, Iterable, Sequence, MutableSequence, Mapping, MutableMapping, FrozenSet
 
 class Feature(object):
     """Feature represents a type of code that can only be built with
@@ -31,13 +31,6 @@ themselves using the STARCH_IMPL_REQUIRES macro."""
     def macro(self) -> str:
         return 'STARCH_FEATURE_' + self.name.upper()
 
-    @property
-    def test_function_expr(self):
-        if self.test_function is None:
-            return "NULL"
-        else:
-            return self.test_function
-
 
 class BuildFlavor(object):
     """BuildFlavor models code built with specific compiler flags.
@@ -57,21 +50,21 @@ intrinsics)"""
     name: str
     description: str
     compile_flags: Sequence[str]
-    features: Collection[Feature]
+    features: FrozenSet[Feature]
     test_function: Optional[str]
 
     def __init__(self,
                  gen: 'Generator',
                  name: str,
                  description: str,
-                 compile_flags: Sequence[str] = (),
-                 features: Collection[Feature] = (),
+                 compile_flags: Iterable[str] = (),
+                 features: Iterable[Feature] = (),
                  test_function: Optional[str] = None):
 
         self.gen = gen
         self.name = name
-        self.compile_flags = list(compile_flags)
-        self.features = set(features)
+        self.compile_flags = tuple(compile_flags)
+        self.features = frozenset(features)
         self.test_function = test_function
 
     @property
@@ -79,14 +72,14 @@ intrinsics)"""
         return 'STARCH_FLAVOR_' + self.name.upper()
 
     @property
-    def test_function_expr(self):
+    def test_function_expr(self) -> str:
         if self.test_function is None:
             return "NULL"
         else:
             return self.test_function
 
     @property
-    def cflags(self):
+    def cflags(self) -> str:
         return ' '.join(self.compile_flags)
 
 
@@ -100,63 +93,63 @@ support."""
     returntype: str
     argtypes: Sequence[str]
     argnames: Sequence[str]
-    impls: Collection['FunctionImpl'] = []
+    impls: Sequence['FunctionImpl'] = []
     has_benchmark: bool = False
 
     def __init__(self,
                  gen: 'Generator',
                  name: str,
-                 argtypes: Sequence[str],
+                 argtypes: Iterable[str],
                  returntype: str = 'void',
-                 argnames: Optional[Sequence[str]] = None):
+                 argnames: Optional[Iterable[str]] = None):
 
         self.gen = gen
         self.name = name
         self.returntype = returntype
-        self.argtypes = argtypes
+        self.argtypes = tuple(argtypes)
 
         if argnames is None:
-            self.argnames = [ f'arg{n}' for n in range(len(argtypes)) ]
+            self.argnames = tuple( f'arg{n}' for n in range(len(self.argtypes)) )
         else:
-            if len(argnames) != len(argtypes):
+            self.argnames = tuple(argnames)
+            if len(self.argnames) != len(self.argtypes):
                 raise ValueError('length of argnames must match length of argtypes')
-            self.argnames = argnames
 
     @property
-    def declaration_arglist(self):
+    def declaration_arglist(self) -> str:
         return ', '.join([f'{typename} {argname}' for typename, argname in zip(self.argtypes, self.argnames)])
 
     @property
-    def named_arglist(self):
+    def named_arglist(self) -> str:
         return ', '.join(self.argnames)
 
     @property
-    def callable_symbol(self):
+    def callable_symbol(self) -> str:
         # nb: no prefix!
         return self.name
 
     @property
-    def select_symbol(self):
+    def select_symbol(self) -> str:
         return self.gen.sym(self.name + '_select')
 
     @property
-    def dispatcher_symbol(self):
+    def dispatcher_symbol(self) -> str:
         return self.gen.sym(self.name + '_dispatch')
 
     @property
-    def pointer_type(self):
+    def pointer_type(self) -> str:
         return self.gen.sym(self.name + '_ptr')
 
     @property
-    def regentry_type(self):
+    def regentry_type(self) -> str:
         return self.gen.sym(self.name + '_regentry')
 
     @property
-    def registry_symbol(self):
+    def registry_symbol(self) -> str:
         return self.gen.sym(self.name + '_registry')
 
     @property
-    def set_wisdom_symbol(self):
+    def set_wisdom_symbol(self) -> str:
         return self.gen.sym(self.name + '_set_wisdom')
 
 
@@ -195,7 +188,7 @@ class SourceFile(object):
     """A scanned source file that contains implementation code."""
 
     path: str
-    impls: Collection[FunctionImpl] = []
+    impls: Sequence[FunctionImpl] = []
 
     def __init__(self, path):
         self.path = path
@@ -214,34 +207,34 @@ specified first."""
 
     name: str
     description: str
-    flavors: Collection[BuildFlavor]
-    wisdom: Mapping[Function,Collection[str]]
+    flavors: Sequence[BuildFlavor]
+    wisdom: Mapping[Function,Sequence[str]]
 
     def __init__(self,
                  name: str,
                  description: str,
-                 flavors: Collection[BuildFlavor],
-                 wisdom: Mapping[Function,Collection[str]] = {}):
+                 flavors: Iterable[BuildFlavor],
+                 wisdom: Mapping[Function,Iterable[str]] = {}):
         self.name = name
         self.description = description
-        self.flavors = list(flavors)
-        self.wisdom = wisdom
+        self.flavors = tuple(flavors)
+        self.wisdom = dict( (k,tuple(v)) for k, v in wisdom.items() )
 
     @property
     def macro(self):
         return 'STARCH_MIX_' + self.name.upper()
 
-    def function_wisdom(self, function) -> Collection[str]:
+    def function_wisdom(self, function) -> Sequence[str]:
         return self.wisdom.get(function, [])
 
 class Generator(object):
-    functions: Mapping[str, Function] = {}
-    features: Mapping[str, Feature] = {}
-    features_by_macro: Mapping[str, Feature] = {}
-    flavors: Mapping[str, BuildFlavor] = {}
-    function_impls: Mapping[str, FunctionImpl] = {}
-    source_files: Collection[SourceFile] = []
-    mixes: Mapping[str, BuildMix] = {}
+    functions: MutableMapping[str, Function] = {}
+    features: MutableMapping[str, Feature] = {}
+    features_by_macro: MutableMapping[str, Feature] = {}
+    flavors: MutableMapping[str, BuildFlavor] = {}
+    function_impls: MutableMapping[str, FunctionImpl] = {}
+    source_files: MutableSequence[SourceFile] = []
+    mixes: MutableMapping[str, BuildMix] = {}
     symbol_prefix: str
     templates: mako.lookup.TemplateLookup
     generated_include_path: str
@@ -249,38 +242,39 @@ class Generator(object):
     generated_dispatcher_path: str
     generated_benchmark_path: str
     generated_makefile_pattern: str
-    includes: Collection[str] = []
+    includes: MutableSequence[str] = []
 
     def __init__(self,
-                 base_dir: str = '.',
-                 template_dir: str = 'templates',
-                 mako_dir: str = 'mako',
-                 generated_include_path: str = 'include/starch.h',
-                 generated_flavor_pattern: str = 'src/flavor.{0}.c',
-                 generated_dispatcher_path: str = 'src/dispatcher.c',
-                 generated_benchmark_path: str = 'src/benchmark.c',
-                 generated_makefile_pattern: str = 'src/makefile.{0}',
+                 runtime_dir: str,
+                 output_dir: str,
+                 template_dir: Optional[str] = None,
+                 mako_dir: Optional[str] = None,
+                 generated_include_path: str = 'starch.h',
+                 generated_flavor_pattern: str = 'flavor.{0}.c',
+                 generated_dispatcher_path: str = 'dispatcher.c',
+                 generated_benchmark_path: str = 'benchmark.c',
+                 generated_makefile_pattern: str = 'makefile.{0}',
                  symbol_prefix: str = 'starch_'):
-        self.base_dir = base_dir
-
-        if os.path.isabs(generated_include_path):
-            raise ValueError(f'generated_include_path must be a relative path')
-        if os.path.isabs(generated_flavor_pattern.format('dummy')):
-            raise ValueError(f'generated_flavor_pattern must be a relative path')
-        if os.path.isabs(generated_dispatcher_path):
-            raise ValueError(f'generated_dispatcher_path must be a relative path')
-        if os.path.isabs(generated_benchmark_path):
-            raise ValueError(f'generated_benchmark_path must be a relative path')
-        if os.path.isabs(generated_makefile_pattern.format('dummy')):
-            raise ValueError(f'generated_makefile_pattern must be a relative path')
-
-        self.generated_include_path = generated_include_path
+        self.runtime_dir = runtime_dir
+        self.output_dir = output_dir
+        self.generated_include_path = os.path.join(output_dir, generated_include_path)
         self.generated_flavor_pattern = generated_flavor_pattern
-        self.generated_dispatcher_path = generated_dispatcher_path
-        self.generated_benchmark_path = generated_benchmark_path
-        self.generated_makefile_pattern = generated_makefile_pattern        
+        self.generated_dispatcher_path = os.path.join(output_dir, generated_dispatcher_path)
+        self.generated_benchmark_path = os.path.join(output_dir, generated_benchmark_path)
+        self.generated_makefile_pattern = generated_makefile_pattern
         self.symbol_prefix = symbol_prefix
+
+        if template_dir is None and '__file__' in globals():
+            template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+        if template_dir is None:
+            raise RuntimeError('cannot determine template directory location, please specify template_dir')
         self.templates = mako.lookup.TemplateLookup(directories = [template_dir], module_directory = mako_dir, imports=['import os'])
+
+    def generated_flavor_path(self, flavor: BuildFlavor) -> str:
+        return os.path.join(self.output_dir, self.generated_flavor_pattern.format(flavor.name))
+
+    def generated_makefile_path(self, mix: BuildMix) -> str:
+        return os.path.join(self.output_dir, self.generated_makefile_pattern.format(mix.name))
 
     def add_include(self, what):
         if what[0] == '<':
@@ -306,9 +300,9 @@ class Generator(object):
         
     def add_function(self, 
                      name: str,
-                     argtypes: Sequence[str],
+                     argtypes: Iterable[str],
                      returntype: str = 'void',
-                     argnames: Optional[Sequence[str]] = None):
+                     argnames: Optional[Iterable[str]] = None):
         if name in self.functions:
             raise RuntimeError('duplicated function: ' + name)
         self.functions[name] = Function(self, name, argtypes, returntype, argnames)
@@ -321,8 +315,8 @@ class Generator(object):
     def add_flavor(self, 
                    name: str,
                    description: str,
-                   compile_flags: Sequence[str] = (),
-                   features: Collection[Union[Feature,str]] = (),
+                   compile_flags: Iterable[str] = (),
+                   features: Iterable[Union[Feature,str]] = (),
                    test_function: Optional[str] = None):
         if name in self.flavors:
             raise RuntimeError('duplicated flavor: ' + name)
@@ -337,8 +331,8 @@ class Generator(object):
     def add_mix(self,
                 name: str,
                 description: str,
-                flavors: Collection[Union[BuildFlavor,str]],
-                wisdom: Mapping[Union[Function,str],Collection[str]] = {}):
+                flavors: Iterable[Union[BuildFlavor,str]],
+                wisdom: Mapping[Union[Function,str],Iterable[str]] = {}):
         if name in self.mixes:
             raise RuntimeError('duplicated mix: ' + name)
 
@@ -347,14 +341,14 @@ class Generator(object):
         self.mixes[name] = BuildMix(name, description, resolved_flavors, resolved_wisdom)
 
     def sym(self, symbol: str) -> str:
-        return self.symbol_prefix + symbol    
+        return self.symbol_prefix + symbol
     
     def build_impl(self, source: SourceFile, lineno: int, function_name: str, impl_name: str, feature_name: Optional[str] =  None) -> Optional[FunctionImpl]:
         if function_name not in self.functions:
             self.warning(source, lineno, f"implementation defined for unknown function '{function_name}', skipped")
-            return None        
+            return None
 
-        function = self.functions.get(function_name)
+        function = self.functions[function_name]
 
         feature: Optional[Feature] = None        
         if feature_name is not None:
@@ -380,14 +374,17 @@ class Generator(object):
         impl.function.impls.append(impl)
         impl.source.impls.append(impl)
 
-    def warning(self, source, lineno, message):
-        print(f'{source.path}:{lineno}: warning: {message}')
-    
-    def scan_file(self, rel_path: str):
-        if os.path.isabs(rel_path):
-            raise ValueError(f'source path {rel_path} must be relative to base_dir, not an absolute path')
+    def warning(self, source: Optional[SourceFile], lineno: Optional[int], message):
+        if source is not None:
+            if lineno is not None:
+                print(f'{source.path}:{lineno}: warning: {message}', file=sys.stderr)
+            else:
+                print(f'{source.path}: warning: {message}', file=sys.stderr)
+        else:
+            print(f'warning: {message}', file=sys.stderr)
 
-        source = SourceFile(rel_path)
+    def scan_file(self, path: str):
+        source = SourceFile(path)
         self.source_files.append(source)
 
         match_impl = re.compile(r'''[^a-zA-Z0-9_]+ STARCH_IMPL \s* \( \s*      # macro call
@@ -404,7 +401,7 @@ class Generator(object):
                                          ([a-zA-Z0-9_]+) \s* \)                          # function name
                                       ''', re.VERBOSE)
 
-        with open(os.path.join(self.base_dir, rel_path), 'r') as f:
+        with open(path, 'r') as f:
             for lineno, line in enumerate(f):
                 if line[0] == '#':
                     continue   # ignore preprocessor lines
@@ -426,24 +423,33 @@ class Generator(object):
                     else:
                         self.warning(source, lineno, f"benchmark defined for unknown function {function_name}, ignored")
 
-    def render(self, template_path, rel_file_path, **kwargs):
+    def render(self, template_path, output_path, **kwargs):
         t = self.templates.get_template(template_path)
-        path = os.path.join(self.base_dir, rel_file_path)
-        result = t.render(gen=self, target_dir=os.path.dirname(rel_file_path), **kwargs)
+        result = t.render(gen=self, current_dir=os.path.dirname(output_path), **kwargs)
 
-        with open(path, 'w') as f:
+        with open(output_path, 'w') as f:
             f.write(result)
-        print(f'wrote {path}', file=sys.stderr)
+        print(f'wrote {output_path}', file=sys.stderr)
 
     def generate(self):
+        if not self.functions:
+            self.warning(None, None, 'no functions defined')
+        if not self.flavors:
+            self.warning(None, None, 'no flavors defined')
+        if not self.mixes:
+            self.warning(None, None, 'no mixes defined')
+        for function in self.functions.values():
+            if not function.impls:
+                self.warning(None, None, f'no implementations of function {function.name} provided')
+
         self.render('/starch.h.template', self.generated_include_path)
 
         for name, flavor in self.flavors.items():
-            self.render('/flavor.c.template', self.generated_flavor_pattern.format(name), flavor=flavor)
+            self.render('/flavor.c.template', self.generated_flavor_path(flavor), flavor=flavor)
 
         self.render('/dispatcher.c.template', self.generated_dispatcher_path)
         self.render('/benchmark.c.template', self.generated_benchmark_path)
 
         for name, mix in self.mixes.items():
-            self.render('/makefile.template', self.generated_makefile_pattern.format(name), mix=mix)
+            self.render('/makefile.template', self.generated_makefile_path(mix), mix=mix)
 

@@ -6,7 +6,7 @@
 #include <inttypes.h>
 #include <time.h>
 
-#include "${os.path.relpath(gen.generated_include_path, target_dir)}"
+#include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
 const unsigned starch_benchmark_warmup_loops = 10;
 const unsigned starch_benchmark_loops = 100000;
@@ -43,7 +43,7 @@ uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark
     } while(0)
 
 % for source in gen.source_files:
-#include "${os.path.relpath(source.path, target_dir)}"
+#include "${os.path.relpath(source.path, current_dir)}"
 % endfor
 
 <% functions_to_benchmark = [f for f in gen.functions.values() if f.has_benchmark] %>

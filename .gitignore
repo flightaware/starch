@@ -5,4 +5,4 @@ example/include/
 example/benchmark
 *.o
 *~
-
+.mypy_cache
