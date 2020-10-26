@@ -93,7 +93,7 @@ support."""
     returntype: str
     argtypes: Sequence[str]
     argnames: Sequence[str]
-    impls: Sequence['FunctionImpl'] = []
+    impls: Sequence['FunctionImpl']
     has_benchmark: bool = False
 
     def __init__(self,
@@ -107,6 +107,7 @@ support."""
         self.name = name
         self.returntype = returntype
         self.argtypes = tuple(argtypes)
+        self.impls = []
 
         if argnames is None:
             self.argnames = tuple( f'arg{n}' for n in range(len(self.argtypes)) )
@@ -188,10 +189,11 @@ class SourceFile(object):
     """A scanned source file that contains implementation code."""
 
     path: str
-    impls: Sequence[FunctionImpl] = []
+    impls: Sequence[FunctionImpl]
 
     def __init__(self, path):
         self.path = path
+        self.impls = []
 
 
 class BuildMix(object):
@@ -269,6 +271,15 @@ class Generator(object):
         if template_dir is None:
             raise RuntimeError('cannot determine template directory location, please specify template_dir')
         self.templates = mako.lookup.TemplateLookup(directories = [template_dir], module_directory = mako_dir, imports=['import os'])
+
+        self.functions = {}
+        self.features = {}
+        self.features_by_macro = {}
+        self.flavors = {}
+        self.function_impls = {}
+        self.source_files = []
+        self.mixes = {}
+        self.includes = []
 
     def generated_flavor_path(self, flavor: BuildFlavor) -> str:
         return os.path.join(self.output_dir, self.generated_flavor_pattern.format(flavor.name))
