@@ -9,8 +9,7 @@
 
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
-const unsigned starch_benchmark_warmup_loops = 100;
-const unsigned starch_benchmark_loops = 100000;
+const unsigned starch_benchmark_warmup_loops = 10;
 
 typedef struct timespec starch_benchmark_time;
 inline static void starch_benchmark_get_time(starch_benchmark_time *t)
@@ -39,19 +38,32 @@ static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _
         return;
     }
 
-    /* warmup */
+    /* initial warmup */
     for (unsigned _loop = 0; _loop < starch_benchmark_warmup_loops; ++_loop)
         _entry->callable ( ${function.named_arglist} );
 
-    /* benchmark */
+    /* pre-benchmark, find a loop count that takes at least 100ms */
     starch_benchmark_time _start, _end;
+    uint64_t _elapsed = 0;
+    uint64_t _loops = 127;
+    while (_elapsed < 100000000) {
+        _loops *= 2;
+        starch_benchmark_get_time(&_start);
+        for (uint64_t _loop = 0; _loop < _loops; ++_loop)
+            _entry->callable ( ${function.named_arglist} );
+        starch_benchmark_get_time(&_end);
+        _elapsed = starch_benchmark_elapsed(&_start, &_end);
+    }
+
+    /* real benchmark, run for approx 1 second */
+    _loops = _loops * 1000000000 / _elapsed;
     starch_benchmark_get_time(&_start);
-    for (unsigned _loop = 0; _loop < starch_benchmark_loops; ++_loop)
+    for (uint64_t _loop = 0; _loop < _loops; ++_loop)
         _entry->callable ( ${function.named_arglist} );
     starch_benchmark_get_time(&_end);
+    _elapsed = starch_benchmark_elapsed(&_start, &_end);
 
-    uint64_t _elapsed = starch_benchmark_elapsed(&_start, &_end);
-    uint64_t _per_loop = _elapsed / starch_benchmark_loops;
+    uint64_t _per_loop = _elapsed / _loops;
     fprintf(stderr, "%" PRIu64 " ns/call\n", _per_loop);
 }
 
