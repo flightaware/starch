@@ -21,7 +21,8 @@ STARCH_CFLAGS := -D${mix.macro}
 <%
    import os
    o_files = []
-   impl_c_files = ' '.join( map(lambda x, gen=gen: os.path.relpath(x.path, gen.runtime_dir), gen.source_files) )
+   impl_c_files = ' '.join( map(lambda x, gen=gen: os.path.relpath(x.path, gen.runtime_dir), gen.impl_files) )
+   benchmark_c_files = ' '.join( map(lambda x, gen=gen: os.path.relpath(x.path, gen.runtime_dir), gen.benchmark_files) )
 %>
 % for flavor in mix.flavors:
 <%
@@ -46,7 +47,7 @@ STARCH_OBJS := ${' '.join(o_files)}
    c_file = os.path.relpath(gen.generated_benchmark_path, gen.runtime_dir)
    o_file = os.path.splitext(c_file)[0] + '.o'
  %>
-${o_file}: ${c_file} ${impl_c_files}
+${o_file}: ${c_file} ${benchmark_c_files}
 	$(STARCH_COMPILE) ${c_file} -o ${o_file}
 
 STARCH_BENCHMARK_OBJ := ${o_file}

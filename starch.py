@@ -237,7 +237,8 @@ class Generator(object):
     features_by_macro: MutableMapping[str, Feature]
     flavors: MutableMapping[str, BuildFlavor]
     function_impls: MutableMapping[str, FunctionImpl]
-    source_files: MutableSequence[SourceFile]
+    impl_files: MutableSequence[SourceFile]
+    benchmark_files: MutableSequence[SourceFile]
     mixes: MutableMapping[str, BuildMix]
     symbol_prefix: str
     templates: mako.lookup.TemplateLookup
@@ -281,7 +282,8 @@ class Generator(object):
         self.features_by_macro = {}
         self.flavors = {}
         self.function_impls = {}
-        self.source_files = []
+        self.impl_files = []
+        self.benchmark_files = []
         self.mixes = {}
         self.includes = []
 
@@ -400,7 +402,6 @@ class Generator(object):
 
     def scan_file(self, path: str):
         source = SourceFile(path)
-        self.source_files.append(source)
 
         match_impl = re.compile(r'''[^a-zA-Z0-9_]+ STARCH_IMPL \s* \( \s*      # macro call
                                     ([a-zA-Z0-9_]+) \s* , \s*                  # function name
@@ -416,6 +417,7 @@ class Generator(object):
                                          ([a-zA-Z0-9_]+) \s* \)                          # function name
                                       ''', re.VERBOSE)
 
+        has_benchmark = has_impl = False
         with open(path, 'r') as f:
             for lineno, line in enumerate(f):
                 if line[0] == '#':
@@ -424,11 +426,13 @@ class Generator(object):
                 for match in match_impl.finditer(line):
                     impl = self.build_impl(source, lineno, match.group(1), match.group(2))
                     if impl:
+                        has_impl = True
                         self.add_impl(impl)
 
                 for match in match_impl_requires.finditer(line):
                     impl = self.build_impl(source, lineno, match.group(1), match.group(2), match.group(3))
                     if impl:
+                        has_impl = True
                         self.add_impl(impl)
 
                 for match in match_benchmark.finditer(line):
@@ -437,8 +441,14 @@ class Generator(object):
                         if self.functions[function_name].has_benchmark:
                             self.warning(source, lineno, f"duplicate benchmark defined for unknown function {function_name}")
                         self.functions[function_name].has_benchmark = True
+                        has_benchmark = True
                     else:
                         self.warning(source, lineno, f"benchmark defined for unknown function {function_name}, ignored")
+
+        if has_impl:
+            self.impl_files.append(source)
+        if has_benchmark:
+            self.benchmark_files.append(source)
 
     def render(self, template_path, output_path, **kwargs):
         t = self.templates.get_template(template_path)

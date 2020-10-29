@@ -11,7 +11,7 @@
 
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
-% for source in gen.source_files:
+% for source in gen.impl_files:
   % if any((impl.feature is None or impl.feature in flavor.features) for impl in source.impls):
 #include "${os.path.relpath(source.path, current_dir)}"
   % endif
