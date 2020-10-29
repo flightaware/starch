@@ -232,13 +232,13 @@ specified first."""
         return self.wisdom.get(function, [])
 
 class Generator(object):
-    functions: MutableMapping[str, Function] = {}
-    features: MutableMapping[str, Feature] = {}
-    features_by_macro: MutableMapping[str, Feature] = {}
-    flavors: MutableMapping[str, BuildFlavor] = {}
-    function_impls: MutableMapping[str, FunctionImpl] = {}
-    source_files: MutableSequence[SourceFile] = []
-    mixes: MutableMapping[str, BuildMix] = {}
+    functions: MutableMapping[str, Function]
+    features: MutableMapping[str, Feature]
+    features_by_macro: MutableMapping[str, Feature]
+    flavors: MutableMapping[str, BuildFlavor]
+    function_impls: MutableMapping[str, FunctionImpl]
+    source_files: MutableSequence[SourceFile]
+    mixes: MutableMapping[str, BuildMix]
     symbol_prefix: str
     templates: mako.lookup.TemplateLookup
     generated_include_path: str
