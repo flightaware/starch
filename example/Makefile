@@ -8,11 +8,11 @@ ARCH := $(shell uname -m)
 all: benchmark testit
 
 ifneq (,$(findstring arm,$(ARCH)))
-  include generated/makefile.arm
+  -include generated/makefile.arm
 else ifneq (,$(findstring x86_64,$(ARCH)))
-  include generated/makefile.x86_64
+  -include generated/makefile.x86_64
 else
-  include generated/makefile.generic
+  -include generated/makefile.generic
 endif
 
 support.o: support.c
