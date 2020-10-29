@@ -12,7 +12,7 @@ const unsigned starch_benchmark_warmup_loops = 100;
 const unsigned starch_benchmark_loops = 100000;
 
 typedef struct timespec starch_benchmark_time;
-inline void starch_benchmark_get_time(starch_benchmark_time *t)
+inline static void starch_benchmark_get_time(starch_benchmark_time *t)
 {
 #ifdef CLOCK_THREAD_CPUTIME_ID
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, t);
@@ -21,14 +21,14 @@ inline void starch_benchmark_get_time(starch_benchmark_time *t)
 #endif
 }
 
-uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end)
+static uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end)
 {
     return ((uint64_t)end->tv_sec - (uint64_t)start->tv_sec) * 1000000000U + (uint64_t)end->tv_nsec - (uint64_t)start->tv_nsec;
 }
 
 <% functions_to_benchmark = [f for f in gen.functions.values() if f.has_benchmark] %>
 % for function in functions_to_benchmark:
-void starch_benchmark_one_${function.name}( ${function.regentry_type} * _entry, ${function.declaration_arglist } )
+static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _entry, ${function.declaration_arglist } )
 {
     fprintf(stderr, "  %-40.40s  ", _entry->name);
 
@@ -54,12 +54,16 @@ void starch_benchmark_one_${function.name}( ${function.regentry_type} * _entry, 
     fprintf(stderr, "%" PRIu64 " ns/call\n", _per_loop);
 }
 
-void starch_benchmark_run_${function.name}( ${function.declaration_arglist } )
+static void starch_benchmark_run_${function.name}( ${function.declaration_arglist } )
 {
     for (${function.regentry_type} *_entry = ${function.registry_symbol}; _entry->name; ++_entry) {
         starch_benchmark_one_${function.name}( _entry, ${function.named_arglist} );
     }
 }
+
+/* prototype the benchmarking function so that we can build with -Wmissing-declarations */
+void ${gen.symbol_prefix}${function.name}_benchmark(void);
+
 % endfor
 
 #define STARCH_SYMBOL(_name) ${gen.symbol_prefix} ## _name ## _benchmark_sym
@@ -73,7 +77,7 @@ void starch_benchmark_run_${function.name}( ${function.declaration_arglist } )
 % endfor
 
 % for function in functions_to_benchmark:
-void starch_benchmark_all_${function.name}(void)
+static void starch_benchmark_all_${function.name}(void)
 {
     fprintf(stderr, "==== ${function.name} ====\n");
     STARCH_BENCHMARK(${function.name}) ();
