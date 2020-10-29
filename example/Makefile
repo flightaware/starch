@@ -24,7 +24,7 @@ benchmark: $(STARCH_OBJS) $(STARCH_BENCHMARK_OBJ) support.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 generate:
-	./generate.py
+	./starchgen.py
 
 clean:
 	rm -f $(STARCH_OBJS) $(STARCH_BENCHMARK_OBJ) support.o benchmark
