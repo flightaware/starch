@@ -31,7 +31,7 @@ ${function.regentry_type} * ${function.select_symbol}() {
     return NULL;
 }
 
-${function.returntype} ${function.dispatcher_symbol} ( ${function.declaration_arglist} ) {
+static ${function.returntype} ${function.dispatcher_symbol} ( ${function.declaration_arglist} ) {
     ${function.regentry_type} *entry = ${function.select_symbol}();
     if (!entry)
         abort();
