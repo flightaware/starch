@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <inttypes.h>
 #include <time.h>
 
@@ -79,15 +80,23 @@ void ${gen.symbol_prefix}${function.name}_benchmark(void);
 % for function in functions_to_benchmark:
 static void starch_benchmark_all_${function.name}(void)
 {
-    fprintf(stderr, "==== ${function.name} ====\n");
+    fprintf(stderr, "==== ${function.name} ===\n");
     STARCH_BENCHMARK(${function.name}) ();
 }
 % endfor
 
 int main(int argc, char **argv)
 {
-% for function in functions_to_benchmark:
-    starch_benchmark_all_${function.name}();
+    const char *selected = (argc > 1 ? argv[1] : NULL);
+% for function in gen.functions.values():
+    if (!selected || !strcmp(selected, "${function.name}")) {
+  % if function.has_benchmark:
+        starch_benchmark_all_${function.name}();
+  % else:
+        fprintf(stderr, "=== ${function.name} ===\n");
+        fprintf(stderr, "  (no benchmark support defined)\n");
+  % endif
+    }
 % endfor
 }
 
