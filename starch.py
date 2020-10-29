@@ -292,7 +292,7 @@ class Generator(object):
         return os.path.join(self.output_dir, self.generated_makefile_pattern.format(mix.name))
 
     def add_include(self, what):
-        if what[0] == '<':
+        if what[0] == '<' or what[0] == '"':
             self.includes.append(what)
         else:
             self.includes.append('"' + what + '"')
