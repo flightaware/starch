@@ -444,9 +444,16 @@ class Generator(object):
         t = self.templates.get_template(template_path)
         result = t.render(gen=self, current_dir=os.path.dirname(output_path), **kwargs)
 
+        if os.path.exists(output_path):
+            with open(output_path, 'r') as f:
+                contents = f.read()
+            if contents == result:
+                print(f'unchanged: {output_path}', file=sys.stderr)
+                return
+
         with open(output_path, 'w') as f:
             f.write(result)
-        print(f'wrote {output_path}', file=sys.stderr)
+        print(f'    wrote: {output_path}', file=sys.stderr)
 
     def generate(self):
         if not self.functions:
