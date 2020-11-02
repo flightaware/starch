@@ -1,5 +1,9 @@
 # starch: framework glue for selecting ISA-specific code at runtime
 
+# Copyright (c) 2020, FlightAware LLC.
+# All rights reserved.
+# See the LICENSE file for licensing terms.
+
 import sys
 import re
 import os

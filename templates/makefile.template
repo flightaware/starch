@@ -1,5 +1,9 @@
 # -*- makefile -*-
 
+### Copyright (c) 2020, FlightAware LLC.
+### All rights reserved.
+### See the LICENSE file for licensing terms.
+
 # starch generated makefile fragment. do not edit.
 # 
 # This makefile is designed to be included in a surrounding makefile. The including makefile

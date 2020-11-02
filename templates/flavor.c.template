@@ -1,3 +1,7 @@
+### Copyright (c) 2020, FlightAware LLC.
+### All rights reserved.
+### See the LICENSE file for licensing terms.
+
 /* starch generated code. Do not edit. */
 
 #define ${flavor.macro}

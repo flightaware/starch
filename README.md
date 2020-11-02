@@ -39,6 +39,25 @@ and the code itself.
 
  * Emits makefile fragments to be included into a larger makefile structure
 
+## License
+
+The generator script and templates are licensed under a BSD 2-clause license,
+see the LICENSE file.
+
+No copyright claim is made on generated code.
+
+## Prerequisites
+
+At generation time (results can be committed to version control):
+
+ * Python 3
+ * [Mako](https://www.makotemplates.org/)
+
+At build time:
+
+ * a C compiler
+ * make
+
 ## Quickstart
 
 Look in example/ for a full example.
