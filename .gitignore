@@ -1,6 +1,5 @@
 __pycache__
 example/mako/
-example/generated/
 example/benchmark
 *.o
 *~
