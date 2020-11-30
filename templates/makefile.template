@@ -35,7 +35,7 @@ STARCH_CFLAGS := -D${mix.macro}
    o_files.append(o_file)
 %>
 ${o_file}: ${c_file} ${impl_c_files}
-	$(STARCH_COMPILE) ${flavor.cflags} ${c_file} -o ${o_file}
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${flavor.cflags} ${c_file} -o ${o_file}
 % endfor
 <%
    c_file = os.path.relpath(gen.generated_dispatcher_path, gen.runtime_dir)
@@ -52,6 +52,6 @@ STARCH_OBJS := ${' '.join(o_files)}
    o_file = os.path.splitext(c_file)[0] + '.o'
  %>
 ${o_file}: ${c_file} ${benchmark_c_files}
-	$(STARCH_COMPILE) ${c_file} -o ${o_file}
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o ${o_file}
 
 STARCH_BENCHMARK_OBJ := ${o_file}

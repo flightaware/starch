@@ -7,16 +7,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdalign.h>
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
+#include <errno.h>
 
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
 const unsigned starch_benchmark_warmup_loops = 10;
 
 typedef struct timespec starch_benchmark_time;
-inline static void starch_benchmark_get_time(starch_benchmark_time *t)
+inline void starch_benchmark_get_time(starch_benchmark_time *t)
 {
 #ifdef CLOCK_THREAD_CPUTIME_ID
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, t);
@@ -25,16 +27,57 @@ inline static void starch_benchmark_get_time(starch_benchmark_time *t)
 #endif
 }
 
-static uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end)
+uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end)
 {
     return ((uint64_t)end->tv_sec - (uint64_t)start->tv_sec) * 1000000000U + (uint64_t)end->tv_nsec - (uint64_t)start->tv_nsec;
 }
 
-<% functions_to_benchmark = [f for f in gen.functions.values() if f.has_benchmark] %>
+void *starch_benchmark_aligned_alloc(size_t alignment, size_t type_alignment, size_t size)
+{
+    size_t use_alignment = (type_alignment > alignment ? type_alignment : alignment);
+    if (use_alignment < sizeof(void*))
+        use_alignment = sizeof(void*);
+    if ( (use_alignment % type_alignment) || (use_alignment % alignment) ) {
+        fprintf(stderr, "STARCH_BENCHMARK_ALLOC of %zu bytes failed: conflicting alignment requirements (%zu versus %zu)\n", size, alignment, type_alignment);
+        return NULL;
+    }
+
+    /* Over-allocate so we can stash our own pointer before the start, and so that we can adjust
+     * the returned alignment so it is only aligned to the requested boundary, and not also
+     * aligned to a larger power of two (we don't want to accidentally benchmark the performance
+     * of a more restrictive larger alignment)
+     */
+    void *block_ptr = aligned_alloc(use_alignment, size + use_alignment * 3);
+    if (!block_ptr) {
+        fprintf(stderr, "STARCH_BENCHMARK_ALLOC of %zu bytes failed: %s\n", size, strerror(errno));
+        return NULL;
+    }
+
+    void *user_ptr = (char*)block_ptr + use_alignment;
+    if ( (uintptr_t)user_ptr % (use_alignment * 2) == 0 ) {
+        // user_ptr is aligned to the next power of two, but we don't want that, move it on
+        user_ptr = (char*)block_ptr + use_alignment * 2;
+    }
+
+    void **stash = (void**)user_ptr - 1;
+    *stash = block_ptr;
+
+    return user_ptr;
+}
+
+void starch_benchmark_aligned_free(void *user_ptr)
+{
+    if (!user_ptr)
+        return;
+    void **stash = (void**)user_ptr - 1;
+    free(*stash);
+}
+
+<% functions_to_benchmark = [f for f in gen.functions.values() if f.benchmark] %>
 % for function in functions_to_benchmark:
 static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _entry, ${function.declaration_arglist } )
 {
-    fprintf(stderr, "  %-40.40s  ", _entry->name);
+    fprintf(stderr, "  %-40s  ", _entry->name);
 
     /* test for support */
     if (_entry->flavor_supported && !(_entry->flavor_supported())) {
@@ -83,21 +126,53 @@ void ${gen.symbol_prefix}${function.name}_benchmark(void);
 
 % endfor
 
+#undef STARCH_ALIGNMENT
+
+#define STARCH_ALIGNMENT 1
+#define STARCH_ALIGNED(_ptr) (_ptr)
 #define STARCH_SYMBOL(_name) ${gen.symbol_prefix} ## _name ## _benchmark_sym
 #define STARCH_IMPL(_function,_impl) ${gen.symbol_prefix} ## _function ## _ ## _impl ## _dummy_benchmark
 #define STARCH_IMPL_REQUIRES(_function,_impl,_feature) STARCH_IMPL(_function,_impl)
 #define STARCH_BENCHMARK(_function) ${gen.symbol_prefix} ## _function ## _benchmark
 #define STARCH_BENCHMARK_RUN(_function, ...) starch_benchmark_run_ ## _function ( __VA_ARGS__ )
+#define STARCH_BENCHMARK_ALLOC(_count, _type) starch_benchmark_aligned_alloc(1, alignof(_type), (_count) * sizeof(_type))
+#define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
 
 % for source in gen.benchmark_files:
 #include "${os.path.relpath(source.path, current_dir)}"
+% endfor
+
+#undef STARCH_ALIGNMENT
+#undef STARCH_ALIGNED
+#undef STARCH_SYMBOL
+#undef STARCH_IMPL
+#undef STARCH_IMPL_REQUIRES
+#undef STARCH_BENCHMARK
+#undef STARCH_BENCHMARK_RUN
+#undef STARCH_BENCHMARK_ALLOC
+#undef STARCH_BENCHMARK_FREE
+
+#define STARCH_ALIGNMENT STARCH_MIX_ALIGNMENT
+#define STARCH_ALIGNED(_ptr) (__builtin_assume_aligned((_ptr), STARCH_MIX_ALIGNMENT))
+#define STARCH_SYMBOL(_name) ${gen.symbol_prefix} ## _name ## _aligned_benchmark_sym
+#define STARCH_IMPL(_function,_impl) ${gen.symbol_prefix} ## _function ## _aligned_ ## _impl ## _dummy_benchmark
+#define STARCH_IMPL_REQUIRES(_function,_impl,_feature) STARCH_IMPL(_function,_impl)
+#define STARCH_BENCHMARK(_function) ${gen.symbol_prefix} ## _function ## _aligned_benchmark
+#define STARCH_BENCHMARK_RUN(_function, ...) starch_benchmark_run_ ## _function ## _aligned ( __VA_ARGS__ )
+#define STARCH_BENCHMARK_ALLOC(_count, _type) starch_benchmark_aligned_alloc(STARCH_MIX_ALIGNMENT, alignof(_type), (_count) * sizeof(_type))
+#define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
+
+% for source in gen.benchmark_files:
+  % if any( (function.aligned and function.benchmark == source) for function in gen.functions.values() ):
+#include "${os.path.relpath(source.path, current_dir)}"
+  % endif
 % endfor
 
 % for function in functions_to_benchmark:
 static void starch_benchmark_all_${function.name}(void)
 {
     fprintf(stderr, "==== ${function.name} ===\n");
-    STARCH_BENCHMARK(${function.name}) ();
+    ${gen.symbol_prefix}${function.name}_benchmark ();
 }
 % endfor
 
@@ -106,7 +181,7 @@ int main(int argc, char **argv)
     const char *selected = (argc > 1 ? argv[1] : NULL);
 % for function in gen.functions.values():
     if (!selected || !strcmp(selected, "${function.name}")) {
-  % if function.has_benchmark:
+  % if function.benchmark:
         starch_benchmark_all_${function.name}();
   % else:
         fprintf(stderr, "=== ${function.name} ===\n");

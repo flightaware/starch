@@ -5,7 +5,7 @@ STARCH_COMPILE := $(CC) $(CFLAGS) -c
 
 ARCH := $(shell uname -m)
 
-all: benchmark testit
+all: generate starch-benchmark
 
 ifneq (,$(findstring arm,$(ARCH)))
   -include generated/makefile.arm
@@ -18,14 +18,11 @@ endif
 support.o: support.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-testit: $(STARCH_OBJS) support.o
-
-benchmark: $(STARCH_OBJS) $(STARCH_BENCHMARK_OBJ) support.o
+starch-benchmark: $(STARCH_OBJS) $(STARCH_BENCHMARK_OBJ) support.o
 	$(CC) $(CFLAGS) -o $@ $^
 
 generate:
 	./starchgen.py
 
 clean:
-	rm -f $(STARCH_OBJS) $(STARCH_BENCHMARK_OBJ) support.o benchmark
-
+	rm -f $(STARCH_OBJS) $(STARCH_BENCHMARK_OBJ) support.o starch-benchmark

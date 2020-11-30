@@ -103,6 +103,28 @@ for generic x86, x86-with-AVX, and x86-with-AVX2; but it would not include
 a build flavor for ARM, because ARM and x86 object code can't be linked
 together into a single binary.
 
+## Alignment
+
+A function can optionally include an aligned version; this is a version of the
+function with an independent call point and wisdom, which assumes that
+data passed to the function is already aligned. Each flavor has an associated
+alignment in bytes, but otherwise it is up to the implementations to decide
+what exactly is aligned. Implementations for an aligned function on a flavor
+that specifies an alignment (>1 byte) will be compiled twice, once with an
+alignment of 1 and once with the flavor's alignment, to generate two different
+compiled versions.
+
+starch provides macros to help with alignment:
+
+ * `STARCH_ALIGNMENT`, in implementations, is the alignment (in bytes) that
+   implementations can assume.
+ * `STARCH_MIX_ALIGNMENT`, defined in the generated header file, is the required
+   alignment (in bytes) for callers of the _aligned version of a function.
+   It is the largest alignment of all flavors in the mix.
+ * `STARCH_ALIGNED(ptr)` in implementations evaluates to `ptr` while hinting to
+   the compiler that the data is aligned according to STARCH_ALIGNMENT. This
+   maps to gcc's `__builtin_assume_aligned` builtin.
+
 ## Benchmarks
 
 Functions can optionally provide a benchmark helper by defining a
@@ -113,7 +135,15 @@ The benchmark helper should set up function inputs for benchmarking and then
 use the `STARCH_BENCHMARK_RUN` macro. This macro expands to code that will
 benchmark each possible impl in turn with the provided arguments.
 
-See `example/impl/subtract_n.c` for an example.
+If the benchmark needs to allocated possibly-aligned buffers,
+two macros `STARCH_BENCHMARK_ALLOC` and `STARCH_BENCHMARK_FREE`
+will allocate suitably aligned buffers for the current `STARCH_ALIGNMENT`
+value. `STARCH_BENCHMARK_ALLOC(count,type)` will allocate `count` elements of
+type `type`, aligned to either `STARCH_ALIGNMENT` or the required alignment
+for `type`, whichever is larger. `STARCH_BENCHMARK_FREE(ptr)` will free a
+buffer previously allocated by `STARCH_BENCHMARK_ALLOC`.
+
+See `example/benchmark/subtract_n_benchmark.c` for examples.
 
 ## Gotchas
 

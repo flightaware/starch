@@ -1,6 +1,6 @@
 __pycache__
 example/mako/
-example/benchmark
+example/starch-benchmark
 *.o
 *~
 .mypy_cache

@@ -56,6 +56,7 @@ intrinsics)"""
     compile_flags: Sequence[str]
     features: FrozenSet[Feature]
     test_function: Optional[str]
+    alignment: int
 
     def __init__(self,
                  gen: 'Generator',
@@ -63,13 +64,15 @@ intrinsics)"""
                  description: str,
                  compile_flags: Iterable[str] = (),
                  features: Iterable[Feature] = (),
-                 test_function: Optional[str] = None):
+                 test_function: Optional[str] = None,
+                 alignment: int = 1):
 
         self.gen = gen
         self.name = name
         self.compile_flags = tuple(compile_flags)
         self.features = frozenset(features)
         self.test_function = test_function
+        self.alignment = alignment
 
     @property
     def macro(self) -> str:
@@ -98,19 +101,23 @@ support."""
     argtypes: Sequence[str]
     argnames: Sequence[str]
     impls: Sequence['FunctionImpl']
-    has_benchmark: bool = False
+    benchmark: Optional['SourceFile'] = None
+    aligned: bool
+    aligned_pair: Optional['Function'] = None
 
     def __init__(self,
                  gen: 'Generator',
                  name: str,
                  argtypes: Iterable[str],
                  returntype: str = 'void',
-                 argnames: Optional[Iterable[str]] = None):
+                 argnames: Optional[Iterable[str]] = None,
+                 aligned: bool = False):
 
         self.gen = gen
         self.name = name
         self.returntype = returntype
         self.argtypes = tuple(argtypes)
+        self.aligned = aligned
         self.impls = []
 
         if argnames is None:
@@ -185,7 +192,10 @@ class FunctionImpl(object):
         self.lineno = lineno
 
     def wisdom_name(self, flavor) -> str:
-        return self.name + '_' + flavor.name
+        if self.function.aligned:
+            return self.name + '_' + flavor.name + '_aligned'
+        else:
+            return self.name + '_' + flavor.name
 
     def impl_symbol(self, flavor) -> str:
         return self.gen.sym(self.function.name + '_' + self.name + '_' + flavor.name)
@@ -323,26 +333,38 @@ class Generator(object):
                      name: str,
                      argtypes: Iterable[str],
                      returntype: str = 'void',
-                     argnames: Optional[Iterable[str]] = None):
+                     argnames: Optional[Iterable[str]] = None,
+                     aligned: bool = False):
         if name in self.functions:
             raise RuntimeError('duplicated function: ' + name)
-        self.functions[name] = Function(self, name, argtypes, returntype, argnames)
+
+        base_function = Function(self, name, argtypes, returntype, argnames, aligned = False)
+        aligned_function: Optional[Function] = None
+        if aligned:
+            aligned_function = Function(self, name +  '_aligned', argtypes, returntype, argnames, aligned = True)
+            base_function.aligned_pair = aligned_function
+            aligned_function.aligned_pair = base_function
+
+        self.functions[base_function.name] = base_function
+        if aligned_function:
+            self.functions[aligned_function.name] = aligned_function
 
     def get_function(self, key: Union[str, Function]) -> Function:
         if isinstance(key, Function):
             return key
         return self.functions[key]                        
-        
+
     def add_flavor(self, 
                    name: str,
                    description: str,
                    compile_flags: Iterable[str] = (),
                    features: Iterable[Union[Feature,str]] = (),
-                   test_function: Optional[str] = None):
+                   test_function: Optional[str] = None,
+                   alignment: int = 1):
         if name in self.flavors:
             raise RuntimeError('duplicated flavor: ' + name)
         resolved_features = map(self.get_feature, features)
-        self.flavors[name] = BuildFlavor(self, name, description, compile_flags, resolved_features, test_function)
+        self.flavors[name] = BuildFlavor(self, name, description, compile_flags, resolved_features, test_function, alignment)
 
     def get_flavor(self, key: Union[str, BuildFlavor]) -> BuildFlavor:
         if isinstance(key, BuildFlavor):
@@ -363,11 +385,11 @@ class Generator(object):
 
     def sym(self, symbol: str) -> str:
         return self.symbol_prefix + symbol
-    
-    def build_impl(self, source: SourceFile, lineno: int, function_name: str, impl_name: str, feature_name: Optional[str] =  None) -> Optional[FunctionImpl]:
+
+    def build_impls(self, source: SourceFile, lineno: int, function_name: str, impl_name: str, feature_name: Optional[str] =  None) -> Sequence[FunctionImpl]:
         if function_name not in self.functions:
             self.warning(source, lineno, f"implementation defined for unknown function '{function_name}', skipped")
-            return None
+            return []
 
         function = self.functions[function_name]
 
@@ -375,15 +397,25 @@ class Generator(object):
         if feature_name is not None:
             if feature_name not in self.features_by_macro:
                 self.warning(source, lineno, f"implementation {function_name} ({impl_name}) requires unknown feature '{feature_name}', skipped")
-                return None
+                return []
             feature = self.features_by_macro.get(feature_name)
 
-        return FunctionImpl(gen = self,
-                            function = function,
-                            name = impl_name,
-                            source = source,
-                            lineno = lineno,
-                            feature = feature)
+        result = [FunctionImpl(gen = self,
+                               function = function,
+                               name = impl_name,
+                               source = source,
+                               lineno = lineno,
+                               feature = feature)]
+
+        if function.aligned_pair:
+            result.append(FunctionImpl(gen = self,
+                                       function = function.aligned_pair,
+                                       name = impl_name,
+                                       source = source,
+                                       lineno = lineno,
+                                       feature = feature))
+
+        return result
 
     def add_impl(self, impl):
         key = (impl.function, impl.name)
@@ -428,23 +460,24 @@ class Generator(object):
                     continue   # ignore preprocessor lines
 
                 for match in match_impl.finditer(line):
-                    impl = self.build_impl(source, lineno, match.group(1), match.group(2))
-                    if impl:
+                    for impl in self.build_impls(source, lineno, match.group(1), match.group(2)):
                         has_impl = True
                         self.add_impl(impl)
 
                 for match in match_impl_requires.finditer(line):
-                    impl = self.build_impl(source, lineno, match.group(1), match.group(2), match.group(3))
-                    if impl:
+                    for impl in self.build_impls(source, lineno, match.group(1), match.group(2), match.group(3)):
                         has_impl = True
                         self.add_impl(impl)
 
                 for match in match_benchmark.finditer(line):
                     function_name = match.group(1)
                     if function_name in self.functions:
-                        if self.functions[function_name].has_benchmark:
+                        function = self.functions[function_name]
+                        if function.benchmark:
                             self.warning(source, lineno, f"duplicate benchmark defined for unknown function {function_name}")
-                        self.functions[function_name].has_benchmark = True
+                        function.benchmark = source
+                        if function.aligned_pair:
+                            function.aligned_pair.benchmark = source
                         has_benchmark = True
                     else:
                         self.warning(source, lineno, f"benchmark defined for unknown function {function_name}, ignored")

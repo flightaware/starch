@@ -1,7 +1,7 @@
 void STARCH_IMPL(subtract_n, generic) (const uint16_t *in, unsigned len, uint16_t n, uint16_t *out)
 {
-    const uint16_t * restrict in_align = __builtin_assume_aligned(in, 16);
-    uint16_t * restrict out_align = __builtin_assume_aligned(out, 16);
+    const uint16_t * restrict in_align = STARCH_ALIGNED(in);
+    uint16_t * restrict out_align = STARCH_ALIGNED(out);
 
     while (len--) {
         out_align[0] = in_align[0] - n;
@@ -12,8 +12,8 @@ void STARCH_IMPL(subtract_n, generic) (const uint16_t *in, unsigned len, uint16_
 
 void STARCH_IMPL(subtract_n, unroll_4) (const uint16_t *in, unsigned len, uint16_t n, uint16_t *out)
 {
-    const uint16_t * restrict in_align = __builtin_assume_aligned(in, 16);
-    uint16_t * restrict out_align = __builtin_assume_aligned(out, 16);
+    const uint16_t * restrict in_align = STARCH_ALIGNED(in);
+    uint16_t * restrict out_align = STARCH_ALIGNED(out);
 
     unsigned len4 = len >> 2;
     unsigned len1 = len & 3;
@@ -40,8 +40,8 @@ void STARCH_IMPL(subtract_n, unroll_4) (const uint16_t *in, unsigned len, uint16
 
 void STARCH_IMPL_REQUIRES(subtract_n, neon_intrinsics, STARCH_FEATURE_NEON) (const uint16_t *in, unsigned len, uint16_t n, uint16_t *out)
 {
-    const uint16_t * restrict in_align = __builtin_assume_aligned(in, 16);
-    uint16_t * restrict out_align = __builtin_assume_aligned(out, 16);
+    const uint16_t * restrict in_align = STARCH_ALIGNED(in);
+    uint16_t * restrict out_align = STARCH_ALIGNED(out);
 
     uint16x8_t subtractor = vdupq_n_u16(n);
 
@@ -72,31 +72,6 @@ void STARCH_IMPL_REQUIRES(subtract_n, neon_intrinsics, STARCH_FEATURE_NEON) (con
         in_align++;
         out_align++;
     }
-}
-
-#endif
-
-
-#ifdef STARCH_BENCHMARK
-
-#include <stdlib.h>
-
-void STARCH_BENCHMARK(subtract_n) (void)
-{
-    uint16_t *in = NULL, *out = NULL;
-    const unsigned len = 65536;
-    const unsigned n = 42;
-
-    if (!(in = aligned_alloc(16, len * sizeof(uint16_t))) || !(out = aligned_alloc(16, len * sizeof(uint16_t)))) {
-        perror("aligned_alloc");
-        goto done;
-    }
-
-    STARCH_BENCHMARK_RUN( subtract_n, in, len, n, out );
-
- done:
-    free(in);
-    free(out);
 }
 
 #endif
