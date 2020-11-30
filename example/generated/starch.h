@@ -64,9 +64,7 @@ void starch_subtract_n_aligned_set_wisdom( const char * const * received_wisdom 
 
 #ifdef STARCH_FLAVOR_GENERIC
 void starch_subtract_n_generic_generic ( const uint16_t * arg0, unsigned arg1, uint16_t arg2, uint16_t * arg3 );
-void starch_subtract_n_aligned_generic_generic ( const uint16_t * arg0, unsigned arg1, uint16_t arg2, uint16_t * arg3 );
 void starch_subtract_n_unroll_4_generic ( const uint16_t * arg0, unsigned arg1, uint16_t arg2, uint16_t * arg3 );
-void starch_subtract_n_aligned_unroll_4_generic ( const uint16_t * arg0, unsigned arg1, uint16_t arg2, uint16_t * arg3 );
 #endif /* STARCH_FLAVOR_GENERIC */
 
 #ifdef STARCH_FLAVOR_ARMV7A_VFPV3

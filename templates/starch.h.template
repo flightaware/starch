@@ -49,7 +49,7 @@ void ${function.set_wisdom_symbol}( const char * const * received_wisdom );
 int ${flavor.test_function} (void);
   % endif
   % for impl in gen.function_impls.values():
-    % if impl.feature is None or impl.feature in flavor.features:
+    % if (flavor.alignment > 1 or not impl.function.aligned) and (impl.feature is None or impl.feature in flavor.features):
 ${impl.function.returntype} ${impl.impl_symbol(flavor)} ( ${impl.function.declaration_arglist} );
     % endif
   % endfor
