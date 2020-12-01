@@ -15,10 +15,17 @@
 
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
+typedef struct timespec starch_benchmark_time;
+
+uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end);
+void *starch_benchmark_aligned_alloc(size_t alignment, size_t type_alignment, size_t size);
+void starch_benchmark_aligned_free(void *user_ptr);
+void starch_benchmark_get_time(starch_benchmark_time *t);
+
 const unsigned starch_benchmark_warmup_loops = 10;
 
 typedef struct timespec starch_benchmark_time;
-inline void starch_benchmark_get_time(starch_benchmark_time *t)
+void starch_benchmark_get_time(starch_benchmark_time *t)
 {
 #ifdef CLOCK_THREAD_CPUTIME_ID
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, t);
