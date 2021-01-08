@@ -34,6 +34,23 @@ void STARCH_IMPL(subtract_n, unroll_4) (const uint16_t *in, unsigned len, uint16
     }
 }
 
+void STARCH_IMPL(subtract_n, bad_implementation) (const uint16_t *in, unsigned len, uint16_t n, uint16_t *out)
+{
+    // This is a deliberately bad implementation that produces
+    // incorrect results. The error should be caught during
+    // benchmarking via STARCH_BENCHMARK_VERIFY.
+    const uint16_t * restrict in_align = STARCH_ALIGNED(in);
+    uint16_t * restrict out_align = STARCH_ALIGNED(out);
+
+    while (len--) {
+        out_align[0] = in_align[0] - n;
+        if (len % 10000 == 0)
+            out_align[0] += 1;
+        in_align++;
+        out_align++;
+    }
+}
+
 #ifdef STARCH_FEATURE_NEON
 
 #include <arm_neon.h>
