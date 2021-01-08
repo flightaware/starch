@@ -39,6 +39,7 @@ extern ${function.pointer_type} ${function.callable_symbol};
 typedef struct {
     int rank;
     const char *name;
+    const char *flavor;
     ${function.pointer_type} callable;
     int (*flavor_supported)();
 } ${function.regentry_type};

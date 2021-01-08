@@ -112,11 +112,11 @@ ${function.regentry_type} ${function.registry_symbol}[] = {
   %>
 #ifdef ${mix.macro}
   % for rank, (impl, flavor) in enumerate(mix_impls):
-    { ${rank}, "${impl.wisdom_name(flavor)}", ${impl.impl_symbol(flavor)}, ${flavor.test_function_expr} },
+    { ${rank}, "${impl.wisdom_name(flavor)}", "${flavor.name}", ${impl.impl_symbol(flavor)}, ${flavor.test_function_expr} },
   % endfor
 #endif /* ${mix.macro} */
 % endfor
-    { 0, NULL, NULL, NULL }
+    { 0, NULL, NULL, NULL, NULL }
 };
 
 % endfor
