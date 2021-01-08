@@ -44,6 +44,7 @@ typedef struct benchmark_flavor_list_node {
 static starch_benchmark_flavor_list *starch_benchmark_flavor_whitelist = NULL;
 static starch_benchmark_flavor_list *starch_benchmark_flavor_blacklist = NULL;
 
+static bool starch_benchmark_list_only = false;
 static bool starch_benchmark_top_only = false;
 
 typedef struct timespec starch_benchmark_time;
@@ -129,6 +130,11 @@ static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _
 
     if (starch_benchmark_flavor_blacklist && starch_benchmark_flavor_in_list(_entry->flavor, starch_benchmark_flavor_blacklist)) {
         fprintf(stderr, "skipped (blacklisted)\n");
+        return;
+    }
+
+    if (starch_benchmark_list_only) {
+        fprintf(stderr, "supported\n");
         return;
     }
 
@@ -267,6 +273,7 @@ static void starch_benchmark_usage(const char *argv0)
         "                     (default: no whitelist, run all runtime-supported flavors)\n"
         "  -N FLAVOR        Add FLAVOR to blacklist\n"
         "                     (default: no blacklist, run all runtime-supported flavors)\n"
+        "  -l               List compiled-in implementations but don't benchmark them\n"
         "  -t               Include only the top candidate per function in wisdom output\n"
         "  FUNCTION         Run benchmarks for these functions only\n"
         "                     (default: benchmark all functions)\n"
@@ -304,7 +311,7 @@ int main(int argc, char **argv)
     const char *output_path = NULL;
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:F:N:ht")) != -1) {
+    while ((opt = getopt(argc, argv, "o:F:N:lht")) != -1) {
         switch (opt) {
         case 'o':
             output_path = optarg;
@@ -326,6 +333,10 @@ int main(int argc, char **argv)
             starch_benchmark_append_flavor(optarg, &starch_benchmark_flavor_blacklist);
             break;
 
+        case 'l':
+            starch_benchmark_list_only = true;
+            break;
+
         case 't':
             starch_benchmark_top_only = true;
             break;
@@ -339,6 +350,11 @@ int main(int argc, char **argv)
             starch_benchmark_usage(argv[0]);
             return 2;
         }
+    }
+
+    if (starch_benchmark_list_only && output_path) {
+        fprintf(stderr, "%s: -o and -l options cannot be specified together\n", argv[0]);
+        return 2;
     }
 
     for (int i = optind; i < argc; ++i) {
