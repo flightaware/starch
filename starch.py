@@ -11,6 +11,25 @@ import mako.lookup
 
 from typing import Optional, Union, Iterable, Sequence, MutableSequence, Mapping, MutableMapping, FrozenSet
 
+def load_wisdom(path: str) -> Mapping[str,Sequence[str]]:
+    result: Mapping[str,Sequence[str]] = {}
+
+    with open(path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line == '' or line.startswith('#'):
+                continue
+
+            parts = re.split('\s+', line)
+            if len(parts) < 2:
+                continue
+
+            func, impl = parts[:2]
+            result.setdefault(func, []).append(impl)
+
+    return result
+
+
 class Feature(object):
     """Feature represents a type of code that can only be built with
 certain compiler flags. For example, code that uses NEON intrinsics
@@ -375,9 +394,13 @@ class Generator(object):
                 name: str,
                 description: str,
                 flavors: Iterable[Union[BuildFlavor,str]],
-                wisdom: Mapping[Union[Function,str],Iterable[str]] = {}):
+                wisdom: Mapping[Union[Function,str],Iterable[str]] = {},
+                wisdom_file: Optional[str] = None):
         if name in self.mixes:
             raise RuntimeError('duplicated mix: ' + name)
+
+        if wisdom_file:
+            wisdom = load_wisdom(wisdom_file)
 
         resolved_flavors = map(self.get_flavor, flavors)
         resolved_wisdom = dict( (self.get_function(name), values) for name,values in wisdom.items() )
