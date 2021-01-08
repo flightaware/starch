@@ -285,6 +285,7 @@ static void starch_benchmark_usage(const char *argv0)
         "Usage: %s [OPTION]... [FUNCTION]...\n"
         "Benchmarks starch functions and optionally writes a sorted wisdom file.\n"
         "\n"
+        "  -r FILE          Read initial wisdom from FILE\n"
         "  -o FILE          Write sorted wisdom to FILE\n"
         "  -F FLAVOR        Add FLAVOR to whitelist\n"
         "                     (default: no whitelist, run all runtime-supported flavors)\n"
@@ -331,8 +332,15 @@ int main(int argc, char **argv)
     const char *output_path = NULL;
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:F:N:i:lht")) != -1) {
+    while ((opt = getopt(argc, argv, "r:o:F:N:i:lht")) != -1) {
         switch (opt) {
+        case 'r':
+            if (${gen.sym("read_wisdom")}(optarg) < 0) {
+                fprintf(stderr, "%s: cannot read %s: %s\n", argv[0], optarg, strerror(errno));
+                return 1;
+            }
+            fprintf(stderr, "%s: loaded wisdom file %s\n", argv[0], optarg);
+            break;
 
         case 'o':
             output_path = optarg;
