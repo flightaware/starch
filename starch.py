@@ -121,6 +121,7 @@ support."""
     argnames: Sequence[str]
     impls: Sequence['FunctionImpl']
     benchmark: Optional['SourceFile'] = None
+    benchmark_verify: Optional['SourceFile'] = None
     aligned: bool
     aligned_pair: Optional['Function'] = None
 
@@ -184,6 +185,14 @@ support."""
     @property
     def set_wisdom_symbol(self) -> str:
         return self.gen.sym(self.name + '_set_wisdom')
+
+    @property
+    def benchmark_symbol(self) -> str:
+        return self.gen.sym(self.name + '_benchmark')
+
+    @property
+    def benchmark_verify_symbol(self) -> str:
+        return self.gen.sym(self.name + '_benchmark_verify')
 
 
 class FunctionImpl(object):
@@ -476,7 +485,11 @@ class Generator(object):
                                          ([a-zA-Z0-9_]+) \s* \)                          # function name
                                       ''', re.VERBOSE)
 
-        has_benchmark = has_impl = False
+        match_verify = re.compile(r'''[^a-zA-Z0-9_]+ STARCH_BENCHMARK_VERIFY \s* \( \s*  # macro call
+                                         ([a-zA-Z0-9_]+) \s* \)                          # function name
+                                      ''', re.VERBOSE)
+
+        has_benchmark = has_impl = has_benchmark_verify = False
         with open(path, 'r') as f:
             for lineno, line in enumerate(f):
                 if line[0] == '#':
@@ -505,9 +518,22 @@ class Generator(object):
                     else:
                         self.warning(source, lineno, f"benchmark defined for unknown function {function_name}, ignored")
 
+                for match in match_verify.finditer(line):
+                    function_name = match.group(1)
+                    if function_name in self.functions:
+                        function = self.functions[function_name]
+                        if function.benchmark_verify:
+                            self.warning(source, lineno, f"duplicate benchmark verifier defined for unknown function {function_name}")
+                        function.benchmark_verify = source
+                        if function.aligned_pair:
+                            function.aligned_pair.benchmark_verify = source
+                        has_benchmark_verify = True
+                    else:
+                        self.warning(source, lineno, f"benchmark verifier defined for unknown function {function_name}, ignored")
+
         if has_impl:
             self.impl_files.append(source)
-        if has_benchmark:
+        if has_benchmark or has_benchmark_verify:
             self.benchmark_files.append(source)
 
     def render(self, template_path, output_path, **kwargs):
