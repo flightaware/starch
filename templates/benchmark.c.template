@@ -11,6 +11,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
+#include <unistd.h>
 #include <errno.h>
 
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
@@ -182,18 +183,73 @@ static void starch_benchmark_all_${function.name}(void)
 }
 % endfor
 
+static void starch_benchmark_usage(const char *argv0)
+{
+    fprintf(stderr,
+        "Usage: %s [OPTION]... [FUNCTION]...\n"
+        "Benchmarks starch functions and optionally writes a sorted wisdom file.\n"
+        "\n"
+        "  FUNCTION         Run benchmarks for these functions only\n"
+        "                     (default: benchmark all functions)\n"
+        "\n"
+        "Supported flavors:   "
+% for flavor in gen.flavors.values():
+#ifdef ${flavor.macro}
+          "${flavor.name} "
+#endif
+% endfor
+          "\n"
+        "Supported functions: "
+% for function in gen.functions.values():
+          "${function.name} "
+% endfor
+          "\n", argv0);
+}
+
 int main(int argc, char **argv)
 {
-    const char *selected = (argc > 1 ? argv[1] : NULL);
+    int specific = 0;
+
+    int opt;
+    while ((opt = getopt(argc, argv, "h")) != -1) {
+        switch (opt) {
+        case 'h':
+            starch_benchmark_usage(argv[0]);
+            return 0;
+
+        case '?':
+        default:
+            starch_benchmark_usage(argv[0]);
+            return 2;
+        }
+    }
+
+    for (int i = optind; i < argc; ++i) {
 % for function in gen.functions.values():
-    if (!selected || !strcmp(selected, "${function.name}")) {
+        if (!strcmp(argv[i], "${function.name}")) {
+            specific = 1;
+% if function.benchmark:
+            starch_benchmark_all_${function.name}();
+% else:
+            fprintf(stderr, "=== ${function.name} ===\n");
+            fprintf(stderr, "  (no benchmark support defined)\n");
+% endif
+            continue;
+        }
+% endfor
+
+        fprintf(stderr, "%s: unrecognized function name: %s\n", argv[0], argv[i]);
+        return 2;
+    }
+
+    if (!specific) {
+% for function in gen.functions.values():
   % if function.benchmark:
         starch_benchmark_all_${function.name}();
   % else:
         fprintf(stderr, "=== ${function.name} ===\n");
         fprintf(stderr, "  (no benchmark support defined)\n");
   % endif
-    }
 % endfor
 }
 
