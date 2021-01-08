@@ -42,8 +42,6 @@ uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark
 void *starch_benchmark_aligned_alloc(size_t alignment, size_t type_alignment, size_t size)
 {
     size_t use_alignment = (type_alignment > alignment ? type_alignment : alignment);
-    if (use_alignment < sizeof(void*))
-        use_alignment = sizeof(void*);
     if ( (use_alignment % type_alignment) || (use_alignment % alignment) ) {
         fprintf(stderr, "STARCH_BENCHMARK_ALLOC of %zu bytes failed: conflicting alignment requirements (%zu versus %zu)\n", size, alignment, type_alignment);
         return NULL;
@@ -54,16 +52,17 @@ void *starch_benchmark_aligned_alloc(size_t alignment, size_t type_alignment, si
      * aligned to a larger power of two (we don't want to accidentally benchmark the performance
      * of a more restrictive larger alignment)
      */
-    void *block_ptr = aligned_alloc(use_alignment, size + use_alignment * 3);
+    size_t header_size = (use_alignment < sizeof(void*) ? sizeof(void*) : use_alignment);
+    char *block_ptr = aligned_alloc(use_alignment, header_size + size + use_alignment);
     if (!block_ptr) {
         fprintf(stderr, "STARCH_BENCHMARK_ALLOC of %zu bytes failed: %s\n", size, strerror(errno));
         return NULL;
     }
 
-    void *user_ptr = (char*)block_ptr + use_alignment;
+    char *user_ptr = block_ptr + header_size;
     if ( (uintptr_t)user_ptr % (use_alignment * 2) == 0 ) {
         // user_ptr is aligned to the next power of two, but we don't want that, move it on
-        user_ptr = (char*)block_ptr + use_alignment * 2;
+        user_ptr += use_alignment;
     }
 
     void **stash = (void**)user_ptr - 1;
