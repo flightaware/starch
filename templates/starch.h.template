@@ -55,4 +55,6 @@ ${impl.function.returntype} ${impl.impl_symbol(flavor)} ( ${impl.function.declar
   % endfor
 #endif /* ${flavor.macro} */
 
+int ${gen.sym("read_wisdom")} (const char * path);
+
 % endfor

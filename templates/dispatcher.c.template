@@ -5,6 +5,8 @@
 /* starch generated code. Do not edit. */
 
 #include <stdlib.h>
+#include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
@@ -118,3 +120,87 @@ ${function.regentry_type} ${function.registry_symbol}[] = {
 };
 
 % endfor
+
+int ${gen.sym("read_wisdom")} (const char * path)
+{
+    FILE *fp = fopen(path, "r");
+    if (!fp)
+        return -1;
+
+    /* reset all ranks to identify entries not listed in the wisdom file; we'll assign ranks at the end to produce a stable sort */
+% for function in gen.functions.values():
+    int rank_${function.name} = 0;
+    for (${function.regentry_type} *entry = ${function.registry_symbol}; entry->name; ++entry) {
+        entry->rank = 0;
+    }
+% endfor
+
+    char linebuf[512];
+    while (fgets(linebuf, sizeof(linebuf), fp)) {
+        /* split name and impl on whitespace, handle comments etc */
+        char *name = linebuf;
+        while (*name && isspace(*name))
+            ++name;
+
+        if (!*name || *name == '#')
+            continue;
+
+        char *end = name;
+        while (*end && !isspace(*end))
+            ++end;
+
+        if (!*end)
+            continue;
+        *end = 0;
+
+        char *impl = end + 1;
+        while (*impl && isspace(*impl))
+            ++impl;
+
+        if (!*impl)
+           continue;
+
+        end = impl;
+        while (*end && !isspace(*end))
+            ++end;
+
+        *end = 0;
+
+        /* try to find a matching registry entry */
+% for function in gen.functions.values():
+        if (!strcmp(name, "${function.name}")) {
+            for (${function.regentry_type} *entry = ${function.registry_symbol}; entry->name; ++entry) {
+                if (!strcmp(impl, entry->name)) {
+                    entry->rank = ++rank_${function.name};
+                    break;
+                }
+            }
+            continue;
+        }
+% endfor
+    }
+
+    if (ferror(fp)) {
+        fclose(fp);
+        return -1;
+    }
+
+    fclose(fp);
+
+    /* assign ranks to unmatched items to (stable) sort them last; re-sort everything */
+% for function in gen.functions.values():
+    {
+        ${function.regentry_type} *entry;
+        for (entry = ${function.registry_symbol}; entry->name; ++entry) {
+            if (!entry->rank)
+                entry->rank = ++rank_${function.name};
+        }
+        qsort(${function.registry_symbol}, entry - ${function.registry_symbol}, sizeof(${function.regentry_type}), starch_regentry_rank_compare);
+
+        /* reset the implementation pointer so the next call will re-select */
+        ${function.callable_symbol} = ${function.dispatcher_symbol};
+    }
+% endfor
+
+    return 0;
+}
