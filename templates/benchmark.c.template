@@ -46,6 +46,7 @@ static starch_benchmark_flavor_list *starch_benchmark_flavor_blacklist = NULL;
 
 static bool starch_benchmark_list_only = false;
 static bool starch_benchmark_top_only = false;
+static unsigned starch_benchmark_iterations = 1;
 
 typedef struct timespec starch_benchmark_time;
 void starch_benchmark_get_time(starch_benchmark_time *t)
@@ -157,13 +158,29 @@ static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _
 
     /* real benchmark, run for approx 1 second */
     _loops = _loops * 1000000000 / _elapsed;
-    starch_benchmark_get_time(&_start);
-    for (uint64_t _loop = 0; _loop < _loops; ++_loop)
-        _entry->callable ( ${function.named_arglist} );
-    starch_benchmark_get_time(&_end);
-    _elapsed = starch_benchmark_elapsed(&_start, &_end);
 
-    uint64_t _per_loop = _elapsed / _loops;
+    _elapsed = 0;
+    uint64_t _elapsed_min = UINT64_MAX;
+    uint64_t _elapsed_max = 0;
+    for (unsigned _iter = 0; _iter < starch_benchmark_iterations; ++_iter) {
+        starch_benchmark_get_time(&_start);
+        for (uint64_t _loop = 0; _loop < _loops; ++_loop)
+            _entry->callable ( ${function.named_arglist} );
+        starch_benchmark_get_time(&_end);
+        uint64_t _elapsed_one = starch_benchmark_elapsed(&_start, &_end);
+        if (_elapsed_one < _elapsed_min)
+            _elapsed_min = _elapsed_one;
+        if (_elapsed_one > _elapsed_max)
+            _elapsed_max = _elapsed_one;
+        _elapsed += _elapsed_one;
+    }
+
+    uint64_t _per_loop;
+    if (starch_benchmark_iterations > 2)
+        _per_loop = (_elapsed - _elapsed_min - _elapsed_max) / _loops / (starch_benchmark_iterations - 2);
+    else
+        _per_loop = _elapsed / _loops / starch_benchmark_iterations;
+
     fprintf(stderr, "%" PRIu64 " ns/call\n", _per_loop);
 
     if (starch_benchmark_result_count >= starch_benchmark_result_size) {
@@ -275,6 +292,9 @@ static void starch_benchmark_usage(const char *argv0)
         "                     (default: no blacklist, run all runtime-supported flavors)\n"
         "  -l               List compiled-in implementations but don't benchmark them\n"
         "  -t               Include only the top candidate per function in wisdom output\n"
+        "  -i ITERS         Run benchmark ITERS times and use the mean. If ITERS > 2, ignore\n"
+        "                   the smallest and largest runs when calculating the mean.\n"
+        "                     (default: 1 iteration)\n"
         "  FUNCTION         Run benchmarks for these functions only\n"
         "                     (default: benchmark all functions)\n"
         "\n"
@@ -311,8 +331,9 @@ int main(int argc, char **argv)
     const char *output_path = NULL;
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:F:N:lht")) != -1) {
+    while ((opt = getopt(argc, argv, "o:F:N:i:lht")) != -1) {
         switch (opt) {
+
         case 'o':
             output_path = optarg;
             break;
@@ -339,6 +360,10 @@ int main(int argc, char **argv)
 
         case 't':
             starch_benchmark_top_only = true;
+            break;
+
+        case 'i':
+            starch_benchmark_iterations = atoi(optarg);
             break;
 
         case 'h':
