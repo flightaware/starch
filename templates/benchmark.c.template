@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdalign.h>
+#include <stdbool.h>
 #include <string.h>
 #include <inttypes.h>
 #include <time.h>
@@ -24,6 +25,14 @@ void starch_benchmark_aligned_free(void *user_ptr);
 void starch_benchmark_get_time(starch_benchmark_time *t);
 
 const unsigned starch_benchmark_warmup_loops = 10;
+
+typedef struct benchmark_flavor_list_node {
+    const char *flavor;
+    struct benchmark_flavor_list_node *next;
+} starch_benchmark_flavor_list;
+
+static starch_benchmark_flavor_list *starch_benchmark_flavor_whitelist = NULL;
+static starch_benchmark_flavor_list *starch_benchmark_flavor_blacklist = NULL;
 
 typedef struct timespec starch_benchmark_time;
 void starch_benchmark_get_time(starch_benchmark_time *t)
@@ -80,6 +89,15 @@ void starch_benchmark_aligned_free(void *user_ptr)
     free(*stash);
 }
 
+static bool starch_benchmark_flavor_in_list(const char *flavor, const starch_benchmark_flavor_list *list)
+{
+    for (; list; list = list->next) {
+        if (!strcmp(flavor, list->flavor))
+            return true;
+    }
+    return false;
+}
+
 <% functions_to_benchmark = [f for f in gen.functions.values() if f.benchmark] %>
 % for function in functions_to_benchmark:
 static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _entry, ${function.declaration_arglist } )
@@ -89,6 +107,16 @@ static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _
     /* test for support */
     if (_entry->flavor_supported && !(_entry->flavor_supported())) {
         fprintf(stderr, "unsupported\n");
+        return;
+    }
+
+    if (starch_benchmark_flavor_whitelist && !starch_benchmark_flavor_in_list(_entry->flavor, starch_benchmark_flavor_whitelist)) {
+        fprintf(stderr, "skipped (not whitelisted)\n");
+        return;
+    }
+
+    if (starch_benchmark_flavor_blacklist && starch_benchmark_flavor_in_list(_entry->flavor, starch_benchmark_flavor_blacklist)) {
+        fprintf(stderr, "skipped (blacklisted)\n");
         return;
     }
 
@@ -189,6 +217,10 @@ static void starch_benchmark_usage(const char *argv0)
         "Usage: %s [OPTION]... [FUNCTION]...\n"
         "Benchmarks starch functions and optionally writes a sorted wisdom file.\n"
         "\n"
+        "  -F FLAVOR        Add FLAVOR to whitelist\n"
+        "                     (default: no whitelist, run all runtime-supported flavors)\n"
+        "  -N FLAVOR        Add FLAVOR to blacklist\n"
+        "                     (default: no blacklist, run all runtime-supported flavors)\n"
         "  FUNCTION         Run benchmarks for these functions only\n"
         "                     (default: benchmark all functions)\n"
         "\n"
@@ -206,13 +238,42 @@ static void starch_benchmark_usage(const char *argv0)
           "\n", argv0);
 }
 
+static void starch_benchmark_append_flavor(const char *flavor, starch_benchmark_flavor_list **list)
+{
+    starch_benchmark_flavor_list *newnode = malloc(sizeof(*newnode));
+    if (!newnode) {
+        fprintf(stderr, "malloc: %s\n", strerror(errno));
+        exit(1);
+    }
+
+    newnode->flavor = flavor;
+    newnode->next = *list;
+    *list = newnode;
+}
+
 int main(int argc, char **argv)
 {
     int specific = 0;
 
     int opt;
-    while ((opt = getopt(argc, argv, "h")) != -1) {
+    while ((opt = getopt(argc, argv, "F:N:h")) != -1) {
         switch (opt) {
+        case 'F':
+            if (starch_benchmark_flavor_in_list(optarg, starch_benchmark_flavor_blacklist)) {
+                fprintf(stderr, "%s: conflicting -F and -N options for flavor %s\n", argv[0], optarg);
+                return 2;
+            }
+            starch_benchmark_append_flavor(optarg, &starch_benchmark_flavor_whitelist);
+            break;
+
+        case 'N':
+            if (starch_benchmark_flavor_in_list(optarg, starch_benchmark_flavor_whitelist)) {
+                fprintf(stderr, "%s: conflicting -F and -N options for flavor %s\n", argv[0], optarg);
+                return 2;
+            }
+            starch_benchmark_append_flavor(optarg, &starch_benchmark_flavor_blacklist);
+            break;
+
         case 'h':
             starch_benchmark_usage(argv[0]);
             return 0;
