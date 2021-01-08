@@ -21,7 +21,14 @@
 
 % endfor
 
+#ifdef STARCH_MIX_ALIGNMENT
 #define STARCH_ALIGNMENT STARCH_MIX_ALIGNMENT
+#define STARCH_IS_ALIGNED(_ptr) (((uintptr_t)(_ptr) & (STARCH_MIX_ALIGNMENT-1)) == 0)
+#else
+/* mix not defined, alignment is unknown, treat everything as unaligned */
+#define STARCH_IS_ALIGNED(_ptr) (0)
+#endif
+
 
 /* entry points and registries */
 
