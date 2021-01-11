@@ -11,25 +11,6 @@ import mako.lookup
 
 from typing import Optional, Union, Iterable, Sequence, MutableSequence, Mapping, MutableMapping, FrozenSet
 
-def load_wisdom(path: str) -> Mapping[str,Sequence[str]]:
-    result: Mapping[str,Sequence[str]] = {}
-
-    with open(path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line == '' or line.startswith('#'):
-                continue
-
-            parts = re.split('\s+', line)
-            if len(parts) < 2:
-                continue
-
-            func, impl = parts[:2]
-            result.setdefault(func, []).append(impl)
-
-    return result
-
-
 class Feature(object):
     """Feature represents a type of code that can only be built with
 certain compiler flags. For example, code that uses NEON intrinsics
@@ -398,7 +379,34 @@ class Generator(object):
         if isinstance(key, BuildFlavor):
             return key
         return self.flavors[key]                        
-        
+
+    def load_wisdom(self, path: str) -> Mapping[str,Sequence[str]]:
+        results: Mapping[Function,Sequence[str]] = {}
+
+        try:
+            f = open(path, 'r')
+        except IOError:
+            self.warning(None, None, f"ignoring missing wisdom file {path}")
+            return results
+
+        with f:
+            for line in f:
+                line = line.strip()
+                if line == '' or line.startswith('#'):
+                    continue
+
+                parts = re.split('\s+', line)
+                if len(parts) < 2:
+                    continue
+
+                func, impl = parts[:2]
+                if func in self.functions:
+                    results.setdefault(self.functions[func], []).append(impl)
+                else:
+                    self.warning(None, None, f"ignoring unknown function {func} in wisdom file {path}")
+
+        return results
+
     def add_mix(self,
                 name: str,
                 description: str,
@@ -408,11 +416,11 @@ class Generator(object):
         if name in self.mixes:
             raise RuntimeError('duplicated mix: ' + name)
 
-        if wisdom_file:
-            wisdom = load_wisdom(wisdom_file)
-
         resolved_flavors = map(self.get_flavor, flavors)
-        resolved_wisdom = dict( (self.get_function(name), values) for name,values in wisdom.items() )
+        if wisdom_file:
+            resolved_wisdom = self.load_wisdom(wisdom_file)
+        else:
+            resolved_wisdom = dict( (self.get_function(name), values) for name,values in wisdom.items() )
         self.mixes[name] = BuildMix(name, description, resolved_flavors, resolved_wisdom)
 
     def sym(self, symbol: str) -> str:
