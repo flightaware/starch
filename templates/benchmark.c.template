@@ -161,12 +161,16 @@ static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _
         starch_benchmark_validation_failed = true;
         return;
     }
-    % endif
-
     if (starch_benchmark_validate_only) {
         fprintf(stderr, "validation ok\n");
         return;
     }
+    % else:
+    if (starch_benchmark_validate_only) {
+        fprintf(stderr, "no validator defined\n");
+        return;
+    }
+    % endif
 
     /* pre-benchmark, find a loop count that takes at least 100ms */
     starch_benchmark_time _start, _end;
