@@ -42,6 +42,8 @@ static starch_benchmark_flavor_list *starch_benchmark_flavor_whitelist = NULL;
 static starch_benchmark_flavor_list *starch_benchmark_flavor_blacklist = NULL;
 
 static bool starch_benchmark_list_only = false;
+static bool starch_benchmark_validate_only = false;
+static bool starch_benchmark_validation_failed = false;
 static bool starch_benchmark_top_only = false;
 static unsigned starch_benchmark_iterations = 1;
 
@@ -149,6 +151,11 @@ static void starch_benchmark_one_subtract_n( starch_subtract_n_regentry * _entry
     /* verify correctness of the output */
     if (! starch_subtract_n_benchmark_verify ( arg0, arg1, arg2, arg3 )) {
         fprintf(stderr, "skipped (verification failed)\n");
+        starch_benchmark_validation_failed = true;
+        return;
+    }
+    if (starch_benchmark_validate_only) {
+        fprintf(stderr, "validation ok\n");
         return;
     }
 
@@ -256,6 +263,11 @@ static void starch_benchmark_one_subtract_n_aligned( starch_subtract_n_aligned_r
     /* verify correctness of the output */
     if (! starch_subtract_n_aligned_benchmark_verify ( arg0, arg1, arg2, arg3 )) {
         fprintf(stderr, "skipped (verification failed)\n");
+        starch_benchmark_validation_failed = true;
+        return;
+    }
+    if (starch_benchmark_validate_only) {
+        fprintf(stderr, "validation ok\n");
         return;
     }
 
@@ -404,6 +416,7 @@ static void starch_benchmark_usage(const char *argv0)
         "  -N FLAVOR        Add FLAVOR to blacklist\n"
         "                     (default: no blacklist, run all runtime-supported flavors)\n"
         "  -l               List compiled-in implementations but don't benchmark them\n"
+        "  -V               Run validation tests, but don't run benchmarks\n"
         "  -t               Include only the top candidate per function in wisdom output\n"
         "  -i ITERS         Run benchmark ITERS times and use the mean. If ITERS > 2, ignore\n"
         "                   the smallest and largest runs when calculating the mean.\n"
@@ -453,7 +466,7 @@ int main(int argc, char **argv)
     const char *output_path = NULL;
 
     int opt;
-    while ((opt = getopt(argc, argv, "r:o:F:N:i:lht")) != -1) {
+    while ((opt = getopt(argc, argv, "r:o:F:N:i:lhtV")) != -1) {
         switch (opt) {
         case 'r':
             if (starch_read_wisdom(optarg) < 0) {
@@ -493,6 +506,10 @@ int main(int argc, char **argv)
 
         case 'i':
             starch_benchmark_iterations = atoi(optarg);
+            break;
+
+        case 'V':
+            starch_benchmark_validate_only = true;
             break;
 
         case 'h':
@@ -565,5 +582,5 @@ int main(int argc, char **argv)
         fprintf(stderr, "%s: wrote sorted wisdom to %s\n", argv[0], output_path);
     }
 
-    return 0;
+    return starch_benchmark_validation_failed ? 1 : 0;
 }
