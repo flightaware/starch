@@ -347,7 +347,7 @@ static void starch_benchmark_run_subtract_n_aligned( const uint16_t * arg0, unsi
 #define STARCH_BENCHMARK(_function) starch_ ## _function ## _benchmark
 #define STARCH_BENCHMARK_VERIFY(_function) starch_ ## _function ## _benchmark_verify
 #define STARCH_BENCHMARK_RUN(_function, ...) starch_benchmark_run_ ## _function ( __VA_ARGS__ )
-#define STARCH_BENCHMARK_ALLOC(_count, _type) starch_benchmark_aligned_alloc(1, alignof(_type), (_count) * sizeof(_type))
+#define STARCH_BENCHMARK_ALLOC(_count, _type) ((_type *) starch_benchmark_aligned_alloc(1, alignof(_type), (_count) * sizeof(_type)))
 #define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
 
 #include "../benchmark/subtract_n_benchmark.c"
@@ -371,7 +371,7 @@ static void starch_benchmark_run_subtract_n_aligned( const uint16_t * arg0, unsi
 #define STARCH_BENCHMARK(_function) starch_ ## _function ## _aligned_benchmark
 #define STARCH_BENCHMARK_VERIFY(_function) starch_ ## _function ## _aligned_benchmark_verify
 #define STARCH_BENCHMARK_RUN(_function, ...) starch_benchmark_run_ ## _function ## _aligned ( __VA_ARGS__ )
-#define STARCH_BENCHMARK_ALLOC(_count, _type) starch_benchmark_aligned_alloc(STARCH_MIX_ALIGNMENT, alignof(_type), (_count) * sizeof(_type))
+#define STARCH_BENCHMARK_ALLOC(_count, _type) ((_type *) starch_benchmark_aligned_alloc(STARCH_MIX_ALIGNMENT, alignof(_type), (_count) * sizeof(_type)))
 #define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
 
 #include "../benchmark/subtract_n_benchmark.c"
