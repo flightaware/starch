@@ -249,7 +249,7 @@ static void starch_benchmark_run_${function.name}( ${function.declaration_arglis
 #define STARCH_BENCHMARK(_function) ${gen.symbol_prefix} ## _function ## _benchmark
 #define STARCH_BENCHMARK_VERIFY(_function) ${gen.symbol_prefix} ## _function ## _benchmark_verify
 #define STARCH_BENCHMARK_RUN(_function, ...) starch_benchmark_run_ ## _function ( __VA_ARGS__ )
-#define STARCH_BENCHMARK_ALLOC(_count, _type) starch_benchmark_aligned_alloc(1, alignof(_type), (_count) * sizeof(_type))
+#define STARCH_BENCHMARK_ALLOC(_count, _type) ((_type *) starch_benchmark_aligned_alloc(1, alignof(_type), (_count) * sizeof(_type)))
 #define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
 
 % for source in gen.benchmark_files:
@@ -275,7 +275,7 @@ static void starch_benchmark_run_${function.name}( ${function.declaration_arglis
 #define STARCH_BENCHMARK(_function) ${gen.symbol_prefix} ## _function ## _aligned_benchmark
 #define STARCH_BENCHMARK_VERIFY(_function) ${gen.symbol_prefix} ## _function ## _aligned_benchmark_verify
 #define STARCH_BENCHMARK_RUN(_function, ...) starch_benchmark_run_ ## _function ## _aligned ( __VA_ARGS__ )
-#define STARCH_BENCHMARK_ALLOC(_count, _type) starch_benchmark_aligned_alloc(STARCH_MIX_ALIGNMENT, alignof(_type), (_count) * sizeof(_type))
+#define STARCH_BENCHMARK_ALLOC(_count, _type) ((_type *) starch_benchmark_aligned_alloc(STARCH_MIX_ALIGNMENT, alignof(_type), (_count) * sizeof(_type)))
 #define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
 
 % for source in gen.benchmark_files:
