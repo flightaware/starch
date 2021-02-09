@@ -73,12 +73,6 @@ void starch_subtract_n_set_wisdom (const char * const * received_wisdom)
 
 starch_subtract_n_regentry starch_subtract_n_registry[] = {
   
-#ifdef STARCH_MIX_GENERIC
-    { 0, "generic_generic", "generic", starch_subtract_n_generic_generic, NULL },
-    { 1, "unroll_4_generic", "generic", starch_subtract_n_unroll_4_generic, NULL },
-    { 2, "bad_implementation_generic", "generic", starch_subtract_n_bad_implementation_generic, NULL },
-#endif /* STARCH_MIX_GENERIC */
-  
 #ifdef STARCH_MIX_ARM
     { 0, "neon_intrinsics_armv7a_vfpv4", "armv7a_vfpv4", starch_subtract_n_neon_intrinsics_armv7a_vfpv4, supports_neon_vfpv4 },
     { 1, "neon_intrinsics_armv7a_vfpv3", "armv7a_vfpv3", starch_subtract_n_neon_intrinsics_armv7a_vfpv3, supports_neon_vfpv3 },
@@ -92,6 +86,12 @@ starch_subtract_n_regentry starch_subtract_n_registry[] = {
     { 9, "unroll_4_generic", "generic", starch_subtract_n_unroll_4_generic, NULL },
     { 10, "bad_implementation_generic", "generic", starch_subtract_n_bad_implementation_generic, NULL },
 #endif /* STARCH_MIX_ARM */
+  
+#ifdef STARCH_MIX_GENERIC
+    { 0, "generic_generic", "generic", starch_subtract_n_generic_generic, NULL },
+    { 1, "unroll_4_generic", "generic", starch_subtract_n_unroll_4_generic, NULL },
+    { 2, "bad_implementation_generic", "generic", starch_subtract_n_bad_implementation_generic, NULL },
+#endif /* STARCH_MIX_GENERIC */
   
 #ifdef STARCH_MIX_X86_64
     { 0, "generic_x86_64_avx2", "x86_64_avx2", starch_subtract_n_generic_x86_64_avx2, supports_x86_avx2 },
@@ -161,12 +161,6 @@ void starch_subtract_n_aligned_set_wisdom (const char * const * received_wisdom)
 
 starch_subtract_n_aligned_regentry starch_subtract_n_aligned_registry[] = {
   
-#ifdef STARCH_MIX_GENERIC
-    { 0, "generic_generic", "generic", starch_subtract_n_generic_generic, NULL },
-    { 1, "unroll_4_generic", "generic", starch_subtract_n_unroll_4_generic, NULL },
-    { 2, "bad_implementation_generic", "generic", starch_subtract_n_bad_implementation_generic, NULL },
-#endif /* STARCH_MIX_GENERIC */
-  
 #ifdef STARCH_MIX_ARM
     { 0, "generic_armv7a_vfpv4_aligned", "armv7a_vfpv4", starch_subtract_n_aligned_generic_armv7a_vfpv4, supports_neon_vfpv4 },
     { 1, "unroll_4_armv7a_vfpv4_aligned", "armv7a_vfpv4", starch_subtract_n_aligned_unroll_4_armv7a_vfpv4, supports_neon_vfpv4 },
@@ -188,6 +182,12 @@ starch_subtract_n_aligned_regentry starch_subtract_n_aligned_registry[] = {
     { 17, "unroll_4_generic", "generic", starch_subtract_n_unroll_4_generic, NULL },
     { 18, "bad_implementation_generic", "generic", starch_subtract_n_bad_implementation_generic, NULL },
 #endif /* STARCH_MIX_ARM */
+  
+#ifdef STARCH_MIX_GENERIC
+    { 0, "generic_generic", "generic", starch_subtract_n_generic_generic, NULL },
+    { 1, "unroll_4_generic", "generic", starch_subtract_n_unroll_4_generic, NULL },
+    { 2, "bad_implementation_generic", "generic", starch_subtract_n_bad_implementation_generic, NULL },
+#endif /* STARCH_MIX_GENERIC */
   
 #ifdef STARCH_MIX_X86_64
     { 0, "generic_x86_64_avx2_aligned", "x86_64_avx2", starch_subtract_n_aligned_generic_x86_64_avx2, supports_x86_avx2 },

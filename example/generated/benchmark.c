@@ -425,14 +425,14 @@ static void starch_benchmark_usage(const char *argv0)
         "                     (default: benchmark all functions)\n"
         "\n"
         "Supported flavors:   "
-#ifdef STARCH_FLAVOR_GENERIC
-          "generic "
-#endif
 #ifdef STARCH_FLAVOR_ARMV7A_VFPV3
           "armv7a_vfpv3 "
 #endif
 #ifdef STARCH_FLAVOR_ARMV7A_VFPV4
           "armv7a_vfpv4 "
+#endif
+#ifdef STARCH_FLAVOR_GENERIC
+          "generic "
 #endif
 #ifdef STARCH_FLAVOR_X86_64_AVX
           "x86_64_avx "
