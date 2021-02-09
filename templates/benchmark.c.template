@@ -115,7 +115,7 @@ static bool starch_benchmark_flavor_in_list(const char *flavor, const starch_ben
 }
 
 <% functions_to_benchmark = [f for f in gen.functions.values() if f.benchmark] %>
-% for function in functions_to_benchmark:
+% for function in sorted(functions_to_benchmark):
 /* prototypes for benchmark helpers provided by user code */
 void ${function.benchmark_symbol} (void);
 % if function.benchmark_verify:
@@ -252,7 +252,7 @@ static void starch_benchmark_run_${function.name}( ${function.declaration_arglis
 #define STARCH_BENCHMARK_ALLOC(_count, _type) ((_type *) starch_benchmark_aligned_alloc(1, alignof(_type), (_count) * sizeof(_type)))
 #define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
 
-% for source in gen.benchmark_files:
+% for source in sorted(gen.benchmark_files):
 #include "${os.path.relpath(source.path, current_dir)}"
 % endfor
 
@@ -278,13 +278,13 @@ static void starch_benchmark_run_${function.name}( ${function.declaration_arglis
 #define STARCH_BENCHMARK_ALLOC(_count, _type) ((_type *) starch_benchmark_aligned_alloc(STARCH_MIX_ALIGNMENT, alignof(_type), (_count) * sizeof(_type)))
 #define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
 
-% for source in gen.benchmark_files:
+% for source in sorted(gen.benchmark_files):
   % if any( (function.aligned and function.benchmark == source) for function in gen.functions.values() ):
 #include "${os.path.relpath(source.path, current_dir)}"
   % endif
 % endfor
 
-% for function in functions_to_benchmark:
+% for function in sorted(functions_to_benchmark):
 static void starch_benchmark_all_${function.name}(void)
 {
     fprintf(stderr, "==== ${function.name} ===\n");
@@ -330,14 +330,14 @@ static void starch_benchmark_usage(const char *argv0)
         "                     (default: benchmark all functions)\n"
         "\n"
         "Supported flavors:   "
-% for flavor in gen.flavors.values():
+% for flavor in sorted(gen.flavors.values()):
 #ifdef ${flavor.macro}
           "${flavor.name} "
 #endif
 % endfor
           "\n"
         "Supported functions: "
-% for function in gen.functions.values():
+% for function in sorted(gen.functions.values()):
           "${function.name} "
 % endfor
           "\n", argv0);
@@ -425,7 +425,7 @@ int main(int argc, char **argv)
     }
 
     for (int i = optind; i < argc; ++i) {
-% for function in gen.functions.values():
+% for function in sorted(gen.functions.values()):
         if (!strcmp(argv[i], "${function.name}")) {
             specific = 1;
 % if function.benchmark:
@@ -443,7 +443,7 @@ int main(int argc, char **argv)
     }
 
     if (!specific) {
-% for function in gen.functions.values():
+% for function in sorted(gen.functions.values()):
   % if function.benchmark:
         starch_benchmark_all_${function.name}();
   % else:

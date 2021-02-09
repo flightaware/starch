@@ -22,7 +22,7 @@ static int starch_regentry_rank_compare (const void *l, const void *r)
     return left->rank - right->rank;
 }
 
-% for function in gen.functions.values():
+% for function in sorted(gen.functions.values()):
 /* dispatcher / registry for ${function.name} */
 
 ${function.regentry_type} * ${function.select_symbol}() {
@@ -80,7 +80,7 @@ void ${function.set_wisdom_symbol} (const char * const * received_wisdom)
 }
 
 ${function.regentry_type} ${function.registry_symbol}[] = {
-% for mix in gen.mixes.values():
+% for mix in sorted(gen.mixes.values()):
   <%
     # gather all implementations for this mix, sort by wisdom
     def rank_key(value, wisdom=mix.function_wisdom(function)):
@@ -128,7 +128,7 @@ int ${gen.sym("read_wisdom")} (const char * path)
         return -1;
 
     /* reset all ranks to identify entries not listed in the wisdom file; we'll assign ranks at the end to produce a stable sort */
-% for function in gen.functions.values():
+% for function in sorted(gen.functions.values()):
     int rank_${function.name} = 0;
     for (${function.regentry_type} *entry = ${function.registry_symbol}; entry->name; ++entry) {
         entry->rank = 0;
@@ -167,7 +167,7 @@ int ${gen.sym("read_wisdom")} (const char * path)
         *end = 0;
 
         /* try to find a matching registry entry */
-% for function in gen.functions.values():
+% for function in sorted(gen.functions.values()):
         if (!strcmp(name, "${function.name}")) {
             for (${function.regentry_type} *entry = ${function.registry_symbol}; entry->name; ++entry) {
                 if (!strcmp(impl, entry->name)) {
@@ -188,7 +188,7 @@ int ${gen.sym("read_wisdom")} (const char * path)
     fclose(fp);
 
     /* assign ranks to unmatched items to (stable) sort them last; re-sort everything */
-% for function in gen.functions.values():
+% for function in sorted(gen.functions.values()):
     {
         ${function.regentry_type} *entry;
         for (entry = ${function.registry_symbol}; entry->name; ++entry) {

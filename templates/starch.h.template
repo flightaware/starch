@@ -10,7 +10,7 @@
 
 /* mixes */
 
-% for mix in gen.mixes.values():
+% for mix in sorted(gen.mixes.values()):
 /* ${mix.description} */
 #ifdef ${mix.macro}
   % for flavor in mix.flavors:
@@ -51,7 +51,7 @@ void ${function.set_wisdom_symbol}( const char * const * received_wisdom );
 % endfor
 /* flavors and prototypes */
 
-% for flavor in gen.flavors.values():
+% for flavor in sorted(gen.flavors.values()):
 #ifdef ${flavor.macro}
   % if flavor.test_function is not None:
 int ${flavor.test_function} (void);
