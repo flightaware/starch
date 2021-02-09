@@ -9,7 +9,7 @@ import re
 import os
 import mako.lookup
 
-from typing import Optional, Union, Iterable, Sequence, MutableSequence, Mapping, MutableMapping, FrozenSet
+from typing import Optional, Union, Iterable, Sequence, MutableSequence, Mapping, MutableMapping, FrozenSet, Dict, List
 
 class Feature(object):
     """Feature represents a type of code that can only be built with
@@ -380,8 +380,8 @@ class Generator(object):
             return key
         return self.flavors[key]                        
 
-    def load_wisdom(self, path: str) -> Mapping[str,Sequence[str]]:
-        results: Mapping[Function,Sequence[str]] = {}
+    def load_wisdom(self, path: str) -> Mapping[Function,Sequence[str]]:
+        results: Dict[Function,List[str]] = {}
 
         try:
             f = open(path, 'r')
@@ -420,7 +420,7 @@ class Generator(object):
         if wisdom_file:
             resolved_wisdom = self.load_wisdom(wisdom_file)
         else:
-            resolved_wisdom = dict( (self.get_function(name), values) for name,values in wisdom.items() )
+            resolved_wisdom = dict( (self.get_function(name), list(values)) for name,values in wisdom.items() )
         self.mixes[name] = BuildMix(name, description, resolved_flavors, resolved_wisdom)
 
     def sym(self, symbol: str) -> str:
