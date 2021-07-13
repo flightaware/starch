@@ -486,7 +486,7 @@ class Generator(object):
         key = (impl.function, impl.name)
         old = self.function_impls.get(key)
         if old:
-            self.warning('duplicate definition of {impl.function.name} / {impl.name}, previously defined at {old.location[0]}:{old.location[1]}')
+            self.warning(impl.source, impl.lineno, f'duplicate definition of {impl.function.name} / {impl.name}, previously defined at {old.source.path}:{old.lineno}')
             return
         self.function_impls[key] = impl
         impl.function.impls.append(impl)
