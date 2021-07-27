@@ -15,6 +15,10 @@
 #include <unistd.h>
 #include <errno.h>
 
+#ifdef STARCH_COMPAT_REQUIRED
+#  include "compat.h"
+#endif
+
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
 typedef struct timespec starch_benchmark_time;
