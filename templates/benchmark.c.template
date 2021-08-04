@@ -15,6 +15,16 @@
 #include <unistd.h>
 #include <errno.h>
 
+//On Windows platform, separate functions for allocating and freeing aligned memory must be used
+#ifdef _WIN32
+#  include <malloc.h>
+#  define util_aligned_alloc(alignment,size) (_aligned_malloc(size, alignment))
+#  define util_aligned_free(ptr) (_aligned_free(ptr))
+#else
+#  define util_aligned_alloc(alignment,size) (aligned_alloc(alignment,size))
+#  define util_aligned_free(ptr) (free(ptr))
+#endif
+
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
 typedef struct timespec starch_benchmark_time;
@@ -79,7 +89,7 @@ void *starch_benchmark_aligned_alloc(size_t alignment, size_t type_alignment, si
      * of a more restrictive larger alignment)
      */
     size_t header_size = (use_alignment < sizeof(void*) ? sizeof(void*) : use_alignment);
-    char *block_ptr = aligned_alloc(use_alignment, header_size + size + use_alignment);
+    char *block_ptr = util_aligned_alloc(use_alignment, header_size + size + use_alignment);
     if (!block_ptr) {
         fprintf(stderr, "STARCH_BENCHMARK_ALLOC of %zu bytes failed: %s\n", size, strerror(errno));
         return NULL;
@@ -102,7 +112,7 @@ void starch_benchmark_aligned_free(void *user_ptr)
     if (!user_ptr)
         return;
     void **stash = (void**)user_ptr - 1;
-    free(*stash);
+    util_aligned_free(*stash);
 }
 
 static bool starch_benchmark_flavor_in_list(const char *flavor, const starch_benchmark_flavor_list *list)

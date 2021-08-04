@@ -21,6 +21,7 @@
 #  $(STARCH_BENCHMARK_OBJ): object files providing a standalone benchmarking app (link all of $(STARCH_OBJS) too)
 #  explicit build rules for each object file listed in $(STARCH_OBJS)
 
+MKDIR_P = mkdir -p
 STARCH_CFLAGS := -D${mix.macro}
 <%
    import os
@@ -35,7 +36,8 @@ STARCH_CFLAGS := -D${mix.macro}
    o_files.append(o_file)
 %>
 ${o_file}: ${c_file} ${impl_c_files}
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${flavor.cflags} ${c_file} -o ${o_file}
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${o_file})
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${flavor.cflags} ${c_file} -o $(STARCH_OBJ_PATH)${o_file}
 % endfor
 <%
    c_file = os.path.relpath(gen.generated_dispatcher_path, gen.runtime_dir)
@@ -43,7 +45,8 @@ ${o_file}: ${c_file} ${impl_c_files}
    o_files.append(o_file)
  %>
 ${o_file}: ${c_file} ${impl_c_files}
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o ${o_file}
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${o_file})
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o $(STARCH_OBJ_PATH)${o_file}
 
 STARCH_OBJS := ${' '.join(o_files)}
 
@@ -52,6 +55,7 @@ STARCH_OBJS := ${' '.join(o_files)}
    o_file = os.path.splitext(c_file)[0] + '.o'
  %>
 ${o_file}: ${c_file} ${benchmark_c_files}
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o ${o_file}
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${o_file})
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o $(STARCH_OBJ_PATH)${o_file}
 
 STARCH_BENCHMARK_OBJ := ${o_file}
