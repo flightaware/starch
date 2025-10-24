@@ -7,34 +7,12 @@
 import sys
 import re
 import os
-import mako.lookup
+import glob
 from functools import total_ordering
-
 from typing import Optional, Union, Iterable, Sequence, MutableSequence, Mapping, MutableMapping, FrozenSet, Dict, List
 
-class Feature(object):
-    """Feature represents a type of code that can only be built with
-certain compiler flags. For example, code that uses NEON intrinsics
-can only be compiled if the compiler is building for an ARM instruction
-set that supports NEON. Implementation code should be conditionally
-compiled using the corresponding macro name, and should declare
-themselves using the STARCH_IMPL_REQUIRES macro."""
-
-    gen: 'Generator'
-    name: str
-    description: str
-    
-    def __init__(self,
-                 gen: 'Generator',
-                 name: str,
-                 description: str):
-        self.gen = gen
-        self.name = name
-        self.description = description
-
-    @property
-    def macro(self) -> str:
-        return 'STARCH_FEATURE_' + self.name.upper()
+import mako.lookup
+import mako.exceptions
 
 @total_ordering
 class BuildFlavor(object):
@@ -44,36 +22,27 @@ Shared implementation code will be built multiple times, once per flavor.
 Each flavor has an associated test function that is called at runtime to
 check if the current hardware supports the code emitted by the flavor. If
 the test function returns false, no code built with the flavor will be executed.
-
-Each flavor has a (possibly empty) list of optional Features that may
-be present at runtime. This list controls which feature-dependent code is
-compiled for this flavor (e.g. an x86 flavor might try to build code that
-depends on SSE, but should not try to build code that depends on ARM NEON
-intrinsics)"""
+"""
 
     gen: 'Generator'
     name: str
     description: str
     compile_flags: Sequence[str]
-    features: FrozenSet[Feature]
     test_function: Optional[str]
-    alignment: int
+    impls: Sequence['FunctionImpl']
 
     def __init__(self,
                  gen: 'Generator',
                  name: str,
                  description: str,
                  compile_flags: Iterable[str] = (),
-                 features: Iterable[Feature] = (),
-                 test_function: Optional[str] = None,
-                 alignment: int = 1):
+                 test_function: Optional[str] = None):
 
         self.gen = gen
         self.name = name
         self.compile_flags = tuple(compile_flags)
-        self.features = frozenset(features)
         self.test_function = test_function
-        self.alignment = alignment
+        self.impls = []
 
     @property
     def macro(self) -> str:
@@ -110,22 +79,18 @@ support."""
     impls: Sequence['FunctionImpl']
     benchmark: Optional['SourceFile'] = None
     benchmark_verify: Optional['SourceFile'] = None
-    aligned: bool
-    aligned_pair: Optional['Function'] = None
 
     def __init__(self,
                  gen: 'Generator',
                  name: str,
                  argtypes: Iterable[str],
                  returntype: str = 'void',
-                 argnames: Optional[Iterable[str]] = None,
-                 aligned: bool = False):
+                 argnames: Optional[Iterable[str]] = None):
 
         self.gen = gen
         self.name = name
         self.returntype = returntype
         self.argtypes = tuple(argtypes)
-        self.aligned = aligned
         self.impls = []
 
         if argnames is None:
@@ -189,12 +154,14 @@ support."""
 
 
 class FunctionImpl(object):
-    """A possible implementation of a function, not built in any particular way yet."""
+    """A possible implementation of a function, associated with a particular flavor.
+The same source file might be buildable by several different flavors; in that case,
+each flavor will have a separate FunctionImpl."""
 
     gen: 'Generator'
     function: Function
     name: str
-    feature: Optional[Feature]
+    flavor: BuildFlavor
     source: 'SourceFile'
     lineno: int
 
@@ -202,24 +169,23 @@ class FunctionImpl(object):
                  gen: 'Generator',
                  function: Function,
                  name: str,
-                 feature: Optional[Feature],
+                 flavor: BuildFlavor,
                  source: 'SourceFile',
                  lineno: int):
         self.gen = gen
         self.function = function
         self.name = name
-        self.feature = feature
+        self.flavor = flavor
         self.source = source
         self.lineno = lineno
 
-    def wisdom_name(self, flavor) -> str:
-        if self.function.aligned:
-            return self.name + '_' + flavor.name + '_aligned'
-        else:
-            return self.name + '_' + flavor.name
+    @property
+    def wisdom_name(self) -> str:
+        return self.name + '_' + self.flavor.name
 
-    def impl_symbol(self, flavor) -> str:
-        return self.gen.sym(self.function.name + '_' + self.name + '_' + flavor.name)
+    @property
+    def impl_symbol(self) -> str:
+        return self.gen.sym(self.function.name + '_' + self.name + '_' + self.flavor.name)
 
 
 @total_ordering
@@ -281,11 +247,8 @@ specified first."""
 
 class Generator(object):
     functions: MutableMapping[str, Function]
-    features: MutableMapping[str, Feature]
-    features_by_macro: MutableMapping[str, Feature]
     flavors: MutableMapping[str, BuildFlavor]
     function_impls: MutableMapping[str, FunctionImpl]
-    impl_files: MutableSequence[SourceFile]
     benchmark_files: MutableSequence[SourceFile]
     mixes: MutableMapping[str, BuildMix]
     symbol_prefix: str
@@ -295,6 +258,7 @@ class Generator(object):
     generated_dispatcher_path: str
     generated_benchmark_path: str
     generated_makefile_pattern: str
+    generated_cmake_pattern: str
     includes: MutableSequence[str] = []
 
     def __init__(self,
@@ -307,6 +271,7 @@ class Generator(object):
                  generated_dispatcher_path: str = 'dispatcher.c',
                  generated_benchmark_path: str = 'benchmark.c',
                  generated_makefile_pattern: str = 'makefile.{0}',
+                 generated_cmake_pattern: str = 'starch_{0}.cmake',
                  symbol_prefix: str = 'starch_',
                  prefix_function_symbols: bool = True):
         self.runtime_dir = runtime_dir
@@ -316,6 +281,7 @@ class Generator(object):
         self.generated_dispatcher_path = os.path.join(output_dir, generated_dispatcher_path)
         self.generated_benchmark_path = os.path.join(output_dir, generated_benchmark_path)
         self.generated_makefile_pattern = generated_makefile_pattern
+        self.generated_cmake_pattern = generated_cmake_pattern
         self.symbol_prefix = symbol_prefix
         self.prefix_function_symbols = prefix_function_symbols
 
@@ -326,8 +292,6 @@ class Generator(object):
         self.templates = mako.lookup.TemplateLookup(directories = [template_dir], module_directory = mako_dir, imports=['import os'])
 
         self.functions = {}
-        self.features = {}
-        self.features_by_macro = {}
         self.flavors = {}
         self.function_impls = {}
         self.impl_files = []
@@ -341,47 +305,25 @@ class Generator(object):
     def generated_makefile_path(self, mix: BuildMix) -> str:
         return os.path.join(self.output_dir, self.generated_makefile_pattern.format(mix.name))
 
+    def generated_cmake_path(self, mix: BuildMix) -> str:
+        return os.path.join(self.output_dir, self.generated_cmake_pattern.format(mix.name))
+
     def add_include(self, what):
         if what[0] == '<' or what[0] == '"':
             self.includes.append(what)
         else:
             self.includes.append('"' + what + '"')
 
-    def add_feature(self,
-                    name: str,
-                    description: str):
-        if name in self.features:
-            raise RuntimeError('duplicated flavor: ' + name)
-        feature = Feature(self, name, description)
-        self.features[name] = self.features_by_macro[feature.macro] = feature
-
-    def get_feature(self, key: Union[str, Feature]) -> Feature:
-        if isinstance(key, Feature):
-            return key
-        return self.features[key]                        
-        
-    def get_feature_macro(self, key: str) -> Optional[Feature]:
-        return self.features_by_macro.get(key, None)
-        
     def add_function(self, 
                      name: str,
                      argtypes: Iterable[str],
                      returntype: str = 'void',
-                     argnames: Optional[Iterable[str]] = None,
-                     aligned: bool = False):
+                     argnames: Optional[Iterable[str]] = None):
         if name in self.functions:
             raise RuntimeError('duplicated function: ' + name)
-
-        base_function = Function(self, name, argtypes, returntype, argnames, aligned = False)
-        aligned_function: Optional[Function] = None
-        if aligned:
-            aligned_function = Function(self, name +  '_aligned', argtypes, returntype, argnames, aligned = True)
-            base_function.aligned_pair = aligned_function
-            aligned_function.aligned_pair = base_function
-
-        self.functions[base_function.name] = base_function
-        if aligned_function:
-            self.functions[aligned_function.name] = aligned_function
+        fn = Function(self, name, argtypes, returntype, argnames)
+        self.functions[name] = fn
+        return fn
 
     def get_function(self, key: Union[str, Function]) -> Function:
         if isinstance(key, Function):
@@ -392,13 +334,12 @@ class Generator(object):
                    name: str,
                    description: str,
                    compile_flags: Iterable[str] = (),
-                   features: Iterable[Union[Feature,str]] = (),
-                   test_function: Optional[str] = None,
-                   alignment: int = 1):
+                   test_function: Optional[str] = None):
         if name in self.flavors:
             raise RuntimeError('duplicated flavor: ' + name)
-        resolved_features = map(self.get_feature, features)
-        self.flavors[name] = BuildFlavor(self, name, description, compile_flags, resolved_features, test_function, alignment)
+        flavor = BuildFlavor(self, name, description, compile_flags, test_function)
+        self.flavors[name] = flavor
+        return flavor
 
     def get_flavor(self, key: Union[str, BuildFlavor]) -> BuildFlavor:
         if isinstance(key, BuildFlavor):
@@ -446,73 +387,48 @@ class Generator(object):
             resolved_wisdom = self.load_wisdom(wisdom_file)
         else:
             resolved_wisdom = dict( (self.get_function(name), list(values)) for name,values in wisdom.items() )
-        self.mixes[name] = BuildMix(name, description, resolved_flavors, resolved_wisdom)
+        mix = BuildMix(name, description, resolved_flavors, resolved_wisdom)
+        self.mixes[name] = mix
+        return mix
 
     def sym(self, symbol: str) -> str:
         return self.symbol_prefix + symbol
 
-    def build_impls(self, source: SourceFile, lineno: int, function_name: str, impl_name: str, feature_name: Optional[str] =  None) -> Sequence[FunctionImpl]:
+    def _build_impls(self, source: SourceFile, lineno: int, function_name: str, impl_name: str, flavors: Sequence[BuildFlavor]) -> Sequence[FunctionImpl]:
         if function_name not in self.functions:
             self.warning(source, lineno, f"implementation defined for unknown function '{function_name}', skipped")
             return []
 
-        function = self.functions[function_name]
-
-        feature: Optional[Feature] = None        
-        if feature_name is not None:
-            if feature_name not in self.features_by_macro:
-                self.warning(source, lineno, f"implementation {function_name} ({impl_name}) requires unknown feature '{feature_name}', skipped")
-                return []
-            feature = self.features_by_macro.get(feature_name)
-
-        result = [FunctionImpl(gen = self,
-                               function = function,
-                               name = impl_name,
-                               source = source,
-                               lineno = lineno,
-                               feature = feature)]
-
-        if function.aligned_pair:
-            result.append(FunctionImpl(gen = self,
-                                       function = function.aligned_pair,
-                                       name = impl_name,
-                                       source = source,
-                                       lineno = lineno,
-                                       feature = feature))
-
-        return result
+        return [FunctionImpl(gen = self,
+                             function = self.functions[function_name],
+                             name = impl_name,
+                             source = source,
+                             lineno = lineno,
+                             flavor = flavor) for flavor in flavors]
 
     def add_impl(self, impl):
-        key = (impl.function, impl.name)
+        key = (impl.function, impl.name, impl.flavor.name)
         old = self.function_impls.get(key)
         if old:
-            self.warning(impl.source, impl.lineno, f'duplicate definition of {impl.function.name} / {impl.name}, previously defined at {old.source.path}:{old.lineno}')
+            self.warning(impl.source, impl.lineno, f'duplicate definition of {impl.function.name} / {impl.name} / {impl.flavor.name}, previously defined at {old.source.path}:{old.lineno}')
             return
         self.function_impls[key] = impl
         impl.function.impls.append(impl)
+        impl.flavor.impls.append(impl)
         impl.source.impls.append(impl)
+        return impl
 
     def warning(self, source: Optional[SourceFile], lineno: Optional[int], message):
         if source is not None:
             if lineno is not None:
-                print(f'{source.path}:{lineno}: warning: {message}', file=sys.stderr)
+                print(f'{source.path}:{lineno+1}: warning: {message}', file=sys.stderr)
             else:
                 print(f'{source.path}: warning: {message}', file=sys.stderr)
         else:
             print(f'warning: {message}', file=sys.stderr)
 
-    def scan_file(self, path: str):
+    def scan_benchmark_file(self, path: str):
         source = SourceFile(path)
-
-        match_impl = re.compile(r'''[^a-zA-Z0-9_]+ STARCH_IMPL \s* \( \s*      # macro call
-                                    ([a-zA-Z0-9_]+) \s* , \s*                  # function name
-                                    ([a-zA-Z0-9_]+) \s* \)                     # implementation name
-                                 ''', re.VERBOSE)
-        match_impl_requires = re.compile(r'''[^a-zA-Z0-9_]+ STARCH_IMPL_REQUIRES \s* \( \s*      # macro call
-                                             ([a-zA-Z0-9_]+) \s* , \s*                           # function name
-                                             ([a-zA-Z0-9_]+) \s* , \s*                           # implementation name
-                                             ([a-zA-Z0-9_]+) \s* \)                              # feature name
-                                          ''', re.VERBOSE)
 
         match_benchmark = re.compile(r'''[^a-zA-Z0-9_]+ STARCH_BENCHMARK \s* \( \s*      # macro call
                                          ([a-zA-Z0-9_]+) \s* \)                          # function name
@@ -522,21 +438,15 @@ class Generator(object):
                                          ([a-zA-Z0-9_]+) \s* \)                          # function name
                                       ''', re.VERBOSE)
 
-        has_benchmark = has_impl = has_benchmark_verify = False
+        if source in self.benchmark_files:
+            self.warning(source, None, "benchmark/verify source already added")
+            return
+
+        self.benchmark_files.append(source)
         with open(path, 'r') as f:
             for lineno, line in enumerate(f):
                 if line[0] == '#':
                     continue   # ignore preprocessor lines
-
-                for match in match_impl.finditer(line):
-                    for impl in self.build_impls(source, lineno, match.group(1), match.group(2)):
-                        has_impl = True
-                        self.add_impl(impl)
-
-                for match in match_impl_requires.finditer(line):
-                    for impl in self.build_impls(source, lineno, match.group(1), match.group(2), match.group(3)):
-                        has_impl = True
-                        self.add_impl(impl)
 
                 for match in match_benchmark.finditer(line):
                     function_name = match.group(1)
@@ -545,9 +455,6 @@ class Generator(object):
                         if function.benchmark:
                             self.warning(source, lineno, f"duplicate benchmark defined for unknown function {function_name}")
                         function.benchmark = source
-                        if function.aligned_pair:
-                            function.aligned_pair.benchmark = source
-                        has_benchmark = True
                     else:
                         self.warning(source, lineno, f"benchmark defined for unknown function {function_name}, ignored")
 
@@ -558,20 +465,47 @@ class Generator(object):
                         if function.benchmark_verify:
                             self.warning(source, lineno, f"duplicate benchmark verifier defined for unknown function {function_name}")
                         function.benchmark_verify = source
-                        if function.aligned_pair:
-                            function.aligned_pair.benchmark_verify = source
-                        has_benchmark_verify = True
                     else:
                         self.warning(source, lineno, f"benchmark verifier defined for unknown function {function_name}, ignored")
 
-        if has_impl:
-            self.impl_files.append(source)
-        if has_benchmark or has_benchmark_verify:
-            self.benchmark_files.append(source)
+    def scan_benchmarks(self, pattern: str):
+        for path in glob.glob(pattern):
+            self.scan_benchmark_file(path)
 
-    def render(self, template_path, output_path, **kwargs):
+    def scan_impl_file(self, path: str, flavors: Optional[Sequence[Union[BuildFlavor,str]]] = None):
+        source = SourceFile(path)
+
+        match_impl = re.compile(r'''[^a-zA-Z0-9_]+ STARCH_IMPL \s* \( \s*      # macro call
+                                    ([a-zA-Z0-9_]+) \s* , \s*                  # function name
+                                    ([a-zA-Z0-9_]+) \s* \)                     # implementation name
+                                 ''', re.VERBOSE)
+
+        if flavors is None:
+            resolved_flavors = self.flavors.values()
+        else:
+            resolved_flavors = map(self.get_flavor, flavors)
+
+        with open(path, 'r') as f:
+            for lineno, line in enumerate(f):
+                if line[0] == '#':
+                    continue   # ignore preprocessor lines
+
+                for match in match_impl.finditer(line):
+                    for impl in self._build_impls(source, lineno, match.group(1), match.group(2), resolved_flavors):
+                        self.add_impl(impl)
+
+    def scan_impls(self, pattern: str, flavors: Optional[Sequence[Union[BuildFlavor,str]]] = None):
+        for path in glob.glob(pattern):
+            self.scan_impl_file(path, flavors)
+
+    def _render(self, template_path, output_path, **kwargs):
         t = self.templates.get_template(template_path)
-        result = t.render(gen=self, current_dir=os.path.dirname(output_path), **kwargs).replace('\r\n', '\n')
+        try:
+            result = t.render(gen=self, current_dir=os.path.dirname(output_path), **kwargs).replace('\r\n', '\n')
+        except:
+            print(f'Exception rendering template {template_path}:', file=sys.stderr)
+            print(mako.exceptions.text_error_template().render(), file=sys.stderr)
+            raise
 
         if os.path.exists(output_path):
             with open(output_path, 'r') as f:
@@ -584,7 +518,7 @@ class Generator(object):
             f.write(result)
         print(f'    wrote: {output_path}', file=sys.stderr)
 
-    def generate(self):
+    def generate(self, makefiles=True, cmake=True):
         if not self.functions:
             self.warning(None, None, 'no functions defined')
         if not self.flavors:
@@ -595,14 +529,16 @@ class Generator(object):
             if not function.impls:
                 self.warning(None, None, f'no implementations of function {function.name} provided')
 
-        self.render('/starch.h.template', self.generated_include_path)
+        self._render('/starch.h.template', self.generated_include_path)
 
-        for name, flavor in self.flavors.items():
-            self.render('/flavor.c.template', self.generated_flavor_path(flavor), flavor=flavor)
+        for flavor in self.flavors.values():
+            self._render('/flavor.c.template', self.generated_flavor_path(flavor), flavor=flavor)
 
-        self.render('/dispatcher.c.template', self.generated_dispatcher_path)
-        self.render('/benchmark.c.template', self.generated_benchmark_path)
+        self._render('/dispatcher.c.template', self.generated_dispatcher_path)
+        self._render('/benchmark.c.template', self.generated_benchmark_path)
 
-        for name, mix in self.mixes.items():
-            self.render('/makefile.template', self.generated_makefile_path(mix), mix=mix)
-
+        for mix in self.mixes.values():
+            if makefiles:
+                self._render('/makefile.template', self.generated_makefile_path(mix), mix=mix)
+            if cmake:
+                self._render('/cmake.template', self.generated_cmake_path(mix), mix=mix)

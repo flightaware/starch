@@ -3,19 +3,26 @@
 #include <asm/hwcap.h>
 #include <sys/auxv.h>
 
-int supports_neon_vfpv3(void)
+int supports_asimd(void)
 {
     long hwcaps = getauxval(AT_HWCAP);
-    return (hwcaps & HWCAP_ARM_NEON) && (hwcaps & HWCAP_ARM_VFPv3);
-}
-
-int supports_neon_vfpv4(void)
-{
-    long hwcaps = getauxval(AT_HWCAP);
-    return (hwcaps & HWCAP_ARM_NEON) && (hwcaps & HWCAP_ARM_VFPv4);
+    return (hwcaps & HWCAP_ARM_NEON);
 }
 
 #endif /* __arm__ */
+
+#ifdef __aarch64__
+
+#include <asm/hwcap.h>
+#include <sys/auxv.h>
+
+int supports_asimd(void)
+{
+    long hwcaps = getauxval(AT_HWCAP);
+    return (hwcaps & HWCAP_ASIMD);
+}
+
+#endif /* __aarch64 __ */
 
 #ifdef __x86_64__
 

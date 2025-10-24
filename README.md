@@ -37,7 +37,8 @@ and the code itself.
    compile flags to take advantage of compile auto-vectorization that
    requires additional instruction set features (AVX, NEON, ..) being enabled.
 
- * Emits makefile fragments to be included into a larger makefile structure
+ * Emits makefile fragments to be included into a larger makefile structure,
+   or cmake files that can be include()d into a cmake project.
 
 ## License
 
@@ -56,7 +57,7 @@ At generation time (results can be committed to version control):
 At build time:
 
  * a C compiler
- * make
+ * make or cmake
 
 ## Quickstart
 
@@ -77,53 +78,26 @@ characteristics - for example, different degrees of manual loop unrolling, or
 an impl that takes advantage of a particular instruction set (NEON, AVX, etc).
 Each impl has a unique-within-the-function "variant" name that identifies it.
 
-Function impls may be conditionally compiled depending on build features
-(see below). This is useful for impls that cannot always be compiled e.g.
-they depend on the availability of a particular instruction set.
-
 A *build flavor* is a particular way of building the function impl. It
 consists of a set of compiler flags to use, plus an associated test function
 that determines at runtime if it is safe to run the code. For example,
 a flavor may enable use of specific instructions that may or may not be
-available at runtime via `-mavx`, `-march=...`, and similar flags. Each
-flavor declares that it provides zero or more *features*.
+available at runtime via `-mavx`, `-march=...`, and similar flags.
 
-A *feature* is a characteristic of the build flavor compiler flags that
-allows certain impls to be compiled. For example, an impl that uses NEON
-intrinsics can only be compiled if the compiler is building for an ARM
-instruction set that supports NEON. Features are defined in the build flavor,
-and are advertised at compile time by the presence of a `STARCH_FEATURE_x`
-macro; implementations may conditionally compile on this macro and should use
-`STARCH_IMPL_REQUIRES` to indicate they will only be emitted when a given
-feature is present.
+An *impl source file* contains one or more function impls. Impl source files
+can either be built always (for all build flavors), or can be associated with a
+subset of flavors if they require particular compiler features. For example,
+an impl source file could provide several impls that use Neon intrinsics,
+and only be compiled for build flavors that include Neon support. Starch
+assumes that if an impl source file is built, then all impls defined in that
+source file will be available, so avoid conditional compilation within an
+impl source file -- instead, move impls to separate files.
 
 A *build mix* is a combination of build flavors that can coexist in the same
 binary. For example, an "x86" mix might include build flavors that build
 for generic x86, x86-with-AVX, and x86-with-AVX2; but it would not include
 a build flavor for ARM, because ARM and x86 object code can't be linked
 together into a single binary.
-
-## Alignment
-
-A function can optionally include an aligned version; this is a version of the
-function with an independent call point and wisdom, which assumes that
-data passed to the function is already aligned. Each flavor has an associated
-alignment in bytes, but otherwise it is up to the implementations to decide
-what exactly is aligned. Implementations for an aligned function on a flavor
-that specifies an alignment (>1 byte) will be compiled twice, once with an
-alignment of 1 and once with the flavor's alignment, to generate two different
-compiled versions.
-
-starch provides macros to help with alignment:
-
- * `STARCH_ALIGNMENT`, in implementations, is the alignment (in bytes) that
-   implementations can assume.
- * `STARCH_MIX_ALIGNMENT`, defined in the generated header file, is the required
-   alignment (in bytes) for callers of the _aligned version of a function.
-   It is the largest alignment of all flavors in the mix.
- * `STARCH_ALIGNED(ptr)` in implementations evaluates to `ptr` while hinting to
-   the compiler that the data is aligned according to STARCH_ALIGNMENT. This
-   maps to gcc's `__builtin_assume_aligned` builtin.
 
 ## Benchmarks
 
@@ -135,38 +109,30 @@ The benchmark helper should set up function inputs for benchmarking and then
 use the `STARCH_BENCHMARK_RUN` macro. This macro expands to code that will
 benchmark each possible impl in turn with the provided arguments.
 
-If the benchmark needs to allocated possibly-aligned buffers,
-two macros `STARCH_BENCHMARK_ALLOC` and `STARCH_BENCHMARK_FREE`
-will allocate suitably aligned buffers for the current `STARCH_ALIGNMENT`
-value. `STARCH_BENCHMARK_ALLOC(count,type)` will allocate `count` elements of
-type `type`, aligned to either `STARCH_ALIGNMENT` or the required alignment
-for `type`, whichever is larger. `STARCH_BENCHMARK_FREE(ptr)` will free a
-buffer previously allocated by `STARCH_BENCHMARK_ALLOC`.
-
-See `example/benchmark/subtract_n_benchmark.c` for examples.
+See `example/impl/subtract_n.benchmark.c` for examples.
 
 ## Gotchas
 
-Files added by `scan_file` are `#include`-d into surrounding support files.
-Multiple files may be included into the same compilation unit. You should
-ensure that you don't pollute the global namespace (macros, static functions
-names, etc) for subsequent files that will follow.
+Files added by `scan_impls` or `scan_benchmarks` are `#include`-d into
+surrounding support files. Multiple files may be included into the same
+compilation unit. You should ensure that you don't pollute the global
+namespace (macros, static functions names, etc) for subsequent files that
+will follow.
 
-Files added by `scan_file` will be compiled multiple times. You should ensure
+Files added by `scan_impls` will be compiled multiple times. You should ensure
 that any symbols other than those handled by STARCH_IMPL / STARCH_IMPL_REQUIRES
 are either static or use the STARCH_SYMBOL macro to get a unique name for
 this compilation pass.
 
-You probably want to separate out benchmark-support code into separate files
-to avoid an extra version of any impls present in the same file from being
-emitted.
+Benchmarks and impls should be in separate files.
 
 ## Wisdom
 
-There is partial support for a wisdom implementation. Wisdom is a priori
-information about the preferred code to use for a given function, for example
-as the result of benchmarking to find the fastest version. It is simply the
-order in which compiled impls are tried until one that is supported is found.
+There is partial support for a wisdom implementation. Wisdom (in the sense of
+"good judgement gained through experience") is information about the preferred
+code to use for a given function, for example as the result of benchmarking to
+find the fastest version. It is simply the order in which compiled impls are
+tried until one that is supported is found.
 
 To set wisdom, there are two options:
 

@@ -1,4 +1,4 @@
-### Copyright (c) 2020, FlightAware LLC.
+### Copyright (c) 2020-2025, FlightAware LLC.
 ### All rights reserved.
 ### See the LICENSE file for licensing terms.
 
@@ -13,22 +13,16 @@
 % for mix in sorted(gen.mixes.values()):
 /* ${mix.description} */
 #ifdef ${mix.macro}
+#ifdef STARCH_MIX
+#  error Multiple starch mixes enabled, only one should be enabled
+#endif
+#define STARCH_MIX_NAME "${mix.name}"
   % for flavor in mix.flavors:
 #define ${flavor.macro}
   % endfor
-#define STARCH_MIX_ALIGNMENT ${max((flavor.alignment) for flavor in mix.flavors)}
 #endif /* ${mix.macro} */
 
 % endfor
-
-#ifdef STARCH_MIX_ALIGNMENT
-#define STARCH_ALIGNMENT STARCH_MIX_ALIGNMENT
-#define STARCH_IS_ALIGNED(_ptr) (((uintptr_t)(_ptr) & (STARCH_MIX_ALIGNMENT-1)) == 0)
-#else
-/* mix not defined, alignment is unknown, treat everything as unaligned */
-#define STARCH_IS_ALIGNED(_ptr) (0)
-#endif
-
 
 /* entry points and registries */
 
@@ -49,6 +43,7 @@ ${function.regentry_type} * ${function.select_symbol}();
 void ${function.set_wisdom_symbol}( const char * const * received_wisdom );
 
 % endfor
+
 /* flavors and prototypes */
 
 % for flavor in sorted(gen.flavors.values()):
@@ -56,10 +51,8 @@ void ${function.set_wisdom_symbol}( const char * const * received_wisdom );
   % if flavor.test_function is not None:
 int ${flavor.test_function} (void);
   % endif
-  % for impl in gen.function_impls.values():
-    % if (flavor.alignment > 1 or not impl.function.aligned) and (impl.feature is None or impl.feature in flavor.features):
-${impl.function.returntype} ${impl.impl_symbol(flavor)} ( ${impl.function.declaration_arglist} );
-    % endif
+  % for impl in flavor.impls:
+${impl.function.returntype} ${impl.impl_symbol} ( ${impl.function.declaration_arglist} );
   % endfor
 #endif /* ${flavor.macro} */
 

@@ -1,11 +1,12 @@
 # -*- makefile -*-
 
-### Copyright (c) 2020, FlightAware LLC.
+### Copyright (c) 2020-2025, FlightAware LLC.
 ### All rights reserved.
 ### See the LICENSE file for licensing terms.
 
-# starch generated makefile fragment. do not edit.
-# 
+# starch makefile fragment for mix ${mix.name}: ${mix.description}
+# This is a generated file, do not edit.
+
 # This makefile is designed to be included in a surrounding makefile. The including makefile
 # should set $(STARCH_COMPILE) to a (partial) command line that provides suitable cflags etc
 # and handles the following appended things:
@@ -25,37 +26,44 @@ MKDIR_P = mkdir -p
 STARCH_CFLAGS := -D${mix.macro}
 <%
    import os
-   o_files = []
-   impl_c_files = ' '.join( map(lambda x, gen=gen: os.path.relpath(x.path, gen.runtime_dir), gen.impl_files) )
-   benchmark_c_files = ' '.join( map(lambda x, gen=gen: os.path.relpath(x.path, gen.runtime_dir), gen.benchmark_files) )
+   def normpath(x): return os.path.relpath((x.path if hasattr(x,'path') else x), gen.runtime_dir)
+   def normpaths(l,gen=gen): return ' '.join(normpath(x) for x in l)
+
+   all_o_files = []
+   all_c_impls = set()
+   gen_include = normpath(gen.generated_include_path)
 %>
+
 % for flavor in mix.flavors:
 <%
-   c_file = os.path.relpath(gen.generated_flavor_path(flavor), gen.runtime_dir)
-   o_file = os.path.splitext(c_file)[0] + '.o'
-   o_files.append(o_file)
+   flavor_c_file = normpath(gen.generated_flavor_path(flavor))
+   flavor_o_file = os.path.splitext(flavor_c_file)[0] + '.o'
+   all_o_files.append(flavor_o_file)
+   flavor_c_impls = set(impl.source for impl in flavor.impls)
+   all_c_impls.update(flavor_c_impls)
 %>
-${o_file}: ${c_file} ${impl_c_files}
-	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${o_file})
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${flavor.cflags} ${c_file} -o $(STARCH_OBJ_PATH)${o_file}
+${flavor_o_file}: ${flavor_c_file} ${gen_include} ${normpaths(flavor_c_impls)}
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${flavor_o_file})
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${flavor.cflags} ${flavor_c_file} -o $(STARCH_OBJ_PATH)${flavor_o_file}
 % endfor
-<%
-   c_file = os.path.relpath(gen.generated_dispatcher_path, gen.runtime_dir)
-   o_file = os.path.splitext(c_file)[0] + '.o'
-   o_files.append(o_file)
- %>
-${o_file}: ${c_file} ${impl_c_files}
-	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${o_file})
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o $(STARCH_OBJ_PATH)${o_file}
-
-STARCH_OBJS := ${' '.join(o_files)}
 
 <%
-   c_file = os.path.relpath(gen.generated_benchmark_path, gen.runtime_dir)
-   o_file = os.path.splitext(c_file)[0] + '.o'
+   dispatcher_c_file = normpath(gen.generated_dispatcher_path)
+   dispatcher_o_file = os.path.splitext(dispatcher_c_file)[0] + '.o'
+   all_o_files.append(dispatcher_o_file)
  %>
-${o_file}: ${c_file} ${benchmark_c_files}
-	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${o_file})
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${c_file} -o $(STARCH_OBJ_PATH)${o_file}
+${dispatcher_o_file}: ${dispatcher_c_file} ${normpath(gen.generated_include_path)}
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${dispatcher_o_file})
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${dispatcher_c_file} -o $(STARCH_OBJ_PATH)${dispatcher_o_file}
 
-STARCH_BENCHMARK_OBJ := ${o_file}
+STARCH_OBJS := ${' '.join(all_o_files)}
+
+<%
+   benchmark_c_file = normpath(gen.generated_benchmark_path)
+   benchmark_o_file = os.path.splitext(benchmark_c_file)[0] + '.o'
+ %>
+${benchmark_o_file}: ${benchmark_c_file} ${gen_include} ${normpaths(gen.benchmark_files)}
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)${benchmark_o_file})
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) ${benchmark_c_file} -o $(STARCH_OBJ_PATH)${benchmark_o_file}
+
+STARCH_BENCHMARK_OBJ := ${benchmark_o_file}
