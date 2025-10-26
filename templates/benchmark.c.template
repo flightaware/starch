@@ -28,6 +28,7 @@ const unsigned starch_benchmark_warmup_loops = 10;
 typedef struct {
     const char *name;
     const char *impl;
+    const char *flavor;
     uint64_t ns;
 } starch_benchmark_result;
 
@@ -186,6 +187,7 @@ static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _
     starch_benchmark_results[starch_benchmark_result_count].name = "${function.name}";
     starch_benchmark_results[starch_benchmark_result_count].impl = _entry->name;
     starch_benchmark_results[starch_benchmark_result_count].ns = _per_loop;
+    starch_benchmark_results[starch_benchmark_result_count].flavor = _entry->flavor;
     ++starch_benchmark_result_count;
 }
 
@@ -250,7 +252,7 @@ static void starch_benchmark_usage(const char *argv0)
             "                     (default: no blacklist, run all runtime-supported flavors)\n"
             "  -l               List compiled-in implementations but don't benchmark them\n"
             "  -V               Run validation tests, but don't run benchmarks\n"
-            "  -t               Include only the top candidate per function in wisdom output\n"
+            "  -t               Include only the top candidate per function, per flavor, in wisdom output\n"
             "  -i ITERS         Run benchmark ITERS times and use the mean. If ITERS > 2, ignore\n"
             "                   the smallest and largest runs when calculating the mean.\n"
             "                     (default: 1 iteration)\n"
@@ -402,19 +404,27 @@ int main(int argc, char **argv)
 
         qsort(starch_benchmark_results, starch_benchmark_result_count, sizeof(*starch_benchmark_results), starch_benchmark_compare_result);
 
+        unsigned last_name_change = 0;
         const char *last_name = NULL;
-        bool first = true;
         for (unsigned i = 0; i < starch_benchmark_result_count; ++i) {
             starch_benchmark_result *result = &starch_benchmark_results[i];
             if (last_name && strcmp(last_name, result->name) != 0) {
                 fprintf(out, "\n");
-                first = true;
+                last_name_change = i;
             }
             last_name = result->name;
-            if (starch_benchmark_top_only && !first)
-                continue;
+            if (starch_benchmark_top_only) {
+                bool flavor_seen = false;
+                for (unsigned j = last_name_change; j < i; ++j) {
+                    if (!strcmp(result->flavor, starch_benchmark_results[j].flavor)) {
+                        flavor_seen = true;
+                        break;
+                    }
+                }
+                if (flavor_seen)
+                    continue;
+            }
             fprintf(out, "%-40s %-40s  # %" PRIu64 " ns/call\n", result->name, result->impl, result->ns);
-            first = false;
         }
 
         fclose(out);
