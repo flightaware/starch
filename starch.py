@@ -382,7 +382,7 @@ class Generator(object):
         if name in self.mixes:
             raise RuntimeError('duplicated mix: ' + name)
 
-        resolved_flavors = map(self.get_flavor, flavors)
+        resolved_flavors = [self.get_flavor(f) for f in flavors]
         if wisdom_file:
             resolved_wisdom = self.load_wisdom(wisdom_file)
         else:
@@ -483,7 +483,7 @@ class Generator(object):
         if flavors is None:
             resolved_flavors = self.flavors.values()
         else:
-            resolved_flavors = map(self.get_flavor, flavors)
+            resolved_flavors = [self.get_flavor(f) for f in flavors]
 
         with open(path, 'r') as f:
             for lineno, line in enumerate(f):
