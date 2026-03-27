@@ -1,4 +1,5 @@
-### Copyright (c) 2020, FlightAware LLC.
+### -*- c -*-
+### Copyright (c) 2020-2025, FlightAware LLC.
 ### All rights reserved.
 ### See the LICENSE file for licensing terms.
 
@@ -15,23 +16,11 @@
 #include <unistd.h>
 #include <errno.h>
 
-//On Windows platform, separate functions for allocating and freeing aligned memory must be used
-#ifdef _WIN32
-#  include <malloc.h>
-#  define util_aligned_alloc(alignment,size) (_aligned_malloc(size, alignment))
-#  define util_aligned_free(ptr) (_aligned_free(ptr))
-#else
-#  define util_aligned_alloc(alignment,size) (aligned_alloc(alignment,size))
-#  define util_aligned_free(ptr) (free(ptr))
-#endif
-
 #include "${os.path.relpath(gen.generated_include_path, current_dir)}"
 
 typedef struct timespec starch_benchmark_time;
 
 uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end);
-void *starch_benchmark_aligned_alloc(size_t alignment, size_t type_alignment, size_t size);
-void starch_benchmark_aligned_free(void *user_ptr);
 void starch_benchmark_get_time(starch_benchmark_time *t);
 
 const unsigned starch_benchmark_warmup_loops = 10;
@@ -39,6 +28,7 @@ const unsigned starch_benchmark_warmup_loops = 10;
 typedef struct {
     const char *name;
     const char *impl;
+    const char *flavor;
     uint64_t ns;
 } starch_benchmark_result;
 
@@ -73,46 +63,6 @@ void starch_benchmark_get_time(starch_benchmark_time *t)
 uint64_t starch_benchmark_elapsed(starch_benchmark_time *start, starch_benchmark_time *end)
 {
     return ((uint64_t)end->tv_sec - (uint64_t)start->tv_sec) * 1000000000U + (uint64_t)end->tv_nsec - (uint64_t)start->tv_nsec;
-}
-
-void *starch_benchmark_aligned_alloc(size_t alignment, size_t type_alignment, size_t size)
-{
-    size_t use_alignment = (type_alignment > alignment ? type_alignment : alignment);
-    if ( (use_alignment % type_alignment) || (use_alignment % alignment) ) {
-        fprintf(stderr, "STARCH_BENCHMARK_ALLOC of %zu bytes failed: conflicting alignment requirements (%zu versus %zu)\n", size, alignment, type_alignment);
-        return NULL;
-    }
-
-    /* Over-allocate so we can stash our own pointer before the start, and so that we can adjust
-     * the returned alignment so it is only aligned to the requested boundary, and not also
-     * aligned to a larger power of two (we don't want to accidentally benchmark the performance
-     * of a more restrictive larger alignment)
-     */
-    size_t header_size = (use_alignment < sizeof(void*) ? sizeof(void*) : use_alignment);
-    char *block_ptr = util_aligned_alloc(use_alignment, header_size + size + use_alignment);
-    if (!block_ptr) {
-        fprintf(stderr, "STARCH_BENCHMARK_ALLOC of %zu bytes failed: %s\n", size, strerror(errno));
-        return NULL;
-    }
-
-    char *user_ptr = block_ptr + header_size;
-    if ( (uintptr_t)user_ptr % (use_alignment * 2) == 0 ) {
-        // user_ptr is aligned to the next power of two, but we don't want that, move it on
-        user_ptr += use_alignment;
-    }
-
-    void **stash = (void**)user_ptr - 1;
-    *stash = block_ptr;
-
-    return user_ptr;
-}
-
-void starch_benchmark_aligned_free(void *user_ptr)
-{
-    if (!user_ptr)
-        return;
-    void **stash = (void**)user_ptr - 1;
-    util_aligned_free(*stash);
 }
 
 static bool starch_benchmark_flavor_in_list(const char *flavor, const starch_benchmark_flavor_list *list)
@@ -237,6 +187,7 @@ static void starch_benchmark_one_${function.name}( ${function.regentry_type} * _
     starch_benchmark_results[starch_benchmark_result_count].name = "${function.name}";
     starch_benchmark_results[starch_benchmark_result_count].impl = _entry->name;
     starch_benchmark_results[starch_benchmark_result_count].ns = _per_loop;
+    starch_benchmark_results[starch_benchmark_result_count].flavor = _entry->flavor;
     ++starch_benchmark_result_count;
 }
 
@@ -249,50 +200,19 @@ static void starch_benchmark_run_${function.name}( ${function.declaration_arglis
 
 % endfor
 
-#undef STARCH_ALIGNMENT
-
-#define STARCH_ALIGNMENT 1
-#define STARCH_ALIGNED(_ptr) (_ptr)
 #define STARCH_SYMBOL(_name) ${gen.symbol_prefix} ## _name ## _benchmark_sym
-#define STARCH_IMPL(_function,_impl) ${gen.symbol_prefix} ## _function ## _ ## _impl ## _dummy_benchmark
-#define STARCH_IMPL_REQUIRES(_function,_impl,_feature) STARCH_IMPL(_function,_impl)
 #define STARCH_BENCHMARK(_function) ${gen.symbol_prefix} ## _function ## _benchmark
 #define STARCH_BENCHMARK_VERIFY(_function) ${gen.symbol_prefix} ## _function ## _benchmark_verify
 #define STARCH_BENCHMARK_RUN(_function, ...) starch_benchmark_run_ ## _function ( __VA_ARGS__ )
-#define STARCH_BENCHMARK_ALLOC(_count, _type) ((_type *) starch_benchmark_aligned_alloc(1, alignof(_type), (_count) * sizeof(_type)))
-#define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
 
 % for source in sorted(gen.benchmark_files):
 #include "${os.path.relpath(source.path, current_dir)}"
 % endfor
 
-#undef STARCH_ALIGNMENT
-#undef STARCH_ALIGNED
 #undef STARCH_SYMBOL
-#undef STARCH_IMPL
-#undef STARCH_IMPL_REQUIRES
 #undef STARCH_BENCHMARK
 #undef STARCH_BENCHMARK_VERIFY
 #undef STARCH_BENCHMARK_RUN
-#undef STARCH_BENCHMARK_ALLOC
-#undef STARCH_BENCHMARK_FREE
-
-#define STARCH_ALIGNMENT STARCH_MIX_ALIGNMENT
-#define STARCH_ALIGNED(_ptr) (__builtin_assume_aligned((_ptr), STARCH_MIX_ALIGNMENT))
-#define STARCH_SYMBOL(_name) ${gen.symbol_prefix} ## _name ## _aligned_benchmark_sym
-#define STARCH_IMPL(_function,_impl) ${gen.symbol_prefix} ## _function ## _aligned_ ## _impl ## _dummy_benchmark
-#define STARCH_IMPL_REQUIRES(_function,_impl,_feature) STARCH_IMPL(_function,_impl)
-#define STARCH_BENCHMARK(_function) ${gen.symbol_prefix} ## _function ## _aligned_benchmark
-#define STARCH_BENCHMARK_VERIFY(_function) ${gen.symbol_prefix} ## _function ## _aligned_benchmark_verify
-#define STARCH_BENCHMARK_RUN(_function, ...) starch_benchmark_run_ ## _function ## _aligned ( __VA_ARGS__ )
-#define STARCH_BENCHMARK_ALLOC(_count, _type) ((_type *) starch_benchmark_aligned_alloc(STARCH_MIX_ALIGNMENT, alignof(_type), (_count) * sizeof(_type)))
-#define STARCH_BENCHMARK_FREE(_ptr) starch_benchmark_aligned_free(_ptr)
-
-% for source in sorted(gen.benchmark_files):
-  % if any( (function.aligned and function.benchmark == source) for function in gen.functions.values() ):
-#include "${os.path.relpath(source.path, current_dir)}"
-  % endif
-% endfor
 
 % for function in sorted(functions_to_benchmark):
 static void starch_benchmark_all_${function.name}(void)
@@ -321,36 +241,43 @@ static int starch_benchmark_compare_result(const void *a, const void *b)
 static void starch_benchmark_usage(const char *argv0)
 {
     fprintf(stderr,
-        "Usage: %s [OPTION]... [FUNCTION]...\n"
-        "Benchmarks starch functions and optionally writes a sorted wisdom file.\n"
-        "\n"
-        "  -r FILE          Read initial wisdom from FILE\n"
-        "  -o FILE          Write sorted wisdom to FILE\n"
-        "  -F FLAVOR        Add FLAVOR to whitelist\n"
-        "                     (default: no whitelist, run all runtime-supported flavors)\n"
-        "  -N FLAVOR        Add FLAVOR to blacklist\n"
-        "                     (default: no blacklist, run all runtime-supported flavors)\n"
-        "  -l               List compiled-in implementations but don't benchmark them\n"
-        "  -V               Run validation tests, but don't run benchmarks\n"
-        "  -t               Include only the top candidate per function in wisdom output\n"
-        "  -i ITERS         Run benchmark ITERS times and use the mean. If ITERS > 2, ignore\n"
-        "                   the smallest and largest runs when calculating the mean.\n"
-        "                     (default: 1 iteration)\n"
-        "  FUNCTION         Run benchmarks for these functions only\n"
-        "                     (default: benchmark all functions)\n"
-        "\n"
-        "Supported flavors:   "
+            "Usage: %s [OPTION ...] [FUNCTION ...]\n"
+            "Benchmarks starch functions and optionally writes a sorted wisdom file.\n"
+            "\n"
+            "  -r FILE          Read initial wisdom from FILE\n"
+            "  -o FILE          Write sorted wisdom to FILE\n"
+            "  -F FLAVOR        Add FLAVOR to whitelist\n"
+            "                     (default: no whitelist, run all runtime-supported flavors)\n"
+            "  -N FLAVOR        Add FLAVOR to blacklist\n"
+            "                     (default: no blacklist, run all runtime-supported flavors)\n"
+            "  -l               List compiled-in implementations but don't benchmark them\n"
+            "  -V               Run validation tests, but don't run benchmarks\n"
+            "  -t               Include only the top candidate per function, per flavor, in wisdom output\n"
+            "  -i ITERS         Run benchmark ITERS times and use the mean. If ITERS > 2, ignore\n"
+            "                   the smallest and largest runs when calculating the mean.\n"
+            "                     (default: 1 iteration)\n"
+            "  FUNCTION         Run benchmarks for these functions only\n"
+            "                     (default: benchmark all functions)\n"
+            "\n", argv0);
+
+    fprintf(stderr,
+            "Mix: %s\n\n"
+            "Flavors:\n", STARCH_MIX_NAME);
 % for flavor in sorted(gen.flavors.values()):
 #ifdef ${flavor.macro}
-          "${flavor.name} "
+    fprintf(stderr,
+            "  %-15s  %s\n",
+            "${flavor.name}",
+            ${(flavor.test_function + "()") if flavor.test_function else "1"} ? "supported" : "not supported");
 #endif
 % endfor
-          "\n"
-        "Supported functions: "
+
+      fprintf(stderr,
+              "\nFunctions: "
 % for function in sorted(gen.functions.values()):
-          "${function.name} "
+              "${function.name} "
 % endfor
-          "\n", argv0);
+              "\n");
 }
 
 static void starch_benchmark_append_flavor(const char *flavor, starch_benchmark_flavor_list **list)
@@ -477,19 +404,27 @@ int main(int argc, char **argv)
 
         qsort(starch_benchmark_results, starch_benchmark_result_count, sizeof(*starch_benchmark_results), starch_benchmark_compare_result);
 
+        unsigned last_name_change = 0;
         const char *last_name = NULL;
-        bool first = true;
         for (unsigned i = 0; i < starch_benchmark_result_count; ++i) {
             starch_benchmark_result *result = &starch_benchmark_results[i];
             if (last_name && strcmp(last_name, result->name) != 0) {
                 fprintf(out, "\n");
-                first = true;
+                last_name_change = i;
             }
             last_name = result->name;
-            if (starch_benchmark_top_only && !first)
-                continue;
+            if (starch_benchmark_top_only) {
+                bool flavor_seen = false;
+                for (unsigned j = last_name_change; j < i; ++j) {
+                    if (!strcmp(result->flavor, starch_benchmark_results[j].flavor)) {
+                        flavor_seen = true;
+                        break;
+                    }
+                }
+                if (flavor_seen)
+                    continue;
+            }
             fprintf(out, "%-40s %-40s  # %" PRIu64 " ns/call\n", result->name, result->impl, result->ns);
-            first = false;
         }
 
         fclose(out);

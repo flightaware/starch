@@ -1,8 +1,9 @@
 # -*- makefile -*-
 
 
-# starch generated makefile fragment. do not edit.
-# 
+# starch makefile fragment for mix arm: ARM, 32-bit
+# This is a generated file, do not edit.
+
 # This makefile is designed to be included in a surrounding makefile. The including makefile
 # should set $(STARCH_COMPILE) to a (partial) command line that provides suitable cflags etc
 # and handles the following appended things:
@@ -18,25 +19,29 @@
 #  $(STARCH_BENCHMARK_OBJ): object files providing a standalone benchmarking app (link all of $(STARCH_OBJS) too)
 #  explicit build rules for each object file listed in $(STARCH_OBJS)
 
+MKDIR_P = mkdir -p
 STARCH_CFLAGS := -DSTARCH_MIX_ARM
 
 
-generated/flavor.armv7a_vfpv4.o: generated/flavor.armv7a_vfpv4.c impl/subtract_n.c
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) -march=armv7-a+neon-vfpv4 -mfpu=neon-vfpv4 -ffast-math generated/flavor.armv7a_vfpv4.c -o generated/flavor.armv7a_vfpv4.o
 
-generated/flavor.armv7a_vfpv3.o: generated/flavor.armv7a_vfpv3.c impl/subtract_n.c
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) -march=armv7-a+neon-vfpv3 -mfpu=neon-vfpv3 -ffast-math generated/flavor.armv7a_vfpv3.c -o generated/flavor.armv7a_vfpv3.o
+generated/flavor.armv7a_asimd.o: generated/flavor.armv7a_asimd.c generated/starch.h impl/subtract_n.generic.c impl/subtract_n.neon.c
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)generated/flavor.armv7a_asimd.o)
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) -march=armv7-a+simd generated/flavor.armv7a_asimd.c -o $(STARCH_OBJ_PATH)generated/flavor.armv7a_asimd.o
 
-generated/flavor.generic.o: generated/flavor.generic.c impl/subtract_n.c
-	$(STARCH_COMPILE) $(STARCH_CFLAGS)  generated/flavor.generic.c -o generated/flavor.generic.o
-
-generated/dispatcher.o: generated/dispatcher.c impl/subtract_n.c
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) generated/dispatcher.c -o generated/dispatcher.o
-
-STARCH_OBJS := generated/flavor.armv7a_vfpv4.o generated/flavor.armv7a_vfpv3.o generated/flavor.generic.o generated/dispatcher.o
+generated/flavor.generic.o: generated/flavor.generic.c generated/starch.h impl/subtract_n.generic.c
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)generated/flavor.generic.o)
+	$(STARCH_COMPILE) $(STARCH_CFLAGS)  generated/flavor.generic.c -o $(STARCH_OBJ_PATH)generated/flavor.generic.o
 
 
-generated/benchmark.o: generated/benchmark.c benchmark/subtract_n_benchmark.c
-	$(STARCH_COMPILE) $(STARCH_CFLAGS) generated/benchmark.c -o generated/benchmark.o
+generated/dispatcher.o: generated/dispatcher.c generated/starch.h
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)generated/dispatcher.o)
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) generated/dispatcher.c -o $(STARCH_OBJ_PATH)generated/dispatcher.o
+
+STARCH_OBJS := generated/flavor.armv7a_asimd.o generated/flavor.generic.o generated/dispatcher.o
+
+
+generated/benchmark.o: generated/benchmark.c generated/starch.h impl/subtract_n.benchmark.c
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)generated/benchmark.o)
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) generated/benchmark.c -o $(STARCH_OBJ_PATH)generated/benchmark.o
 
 STARCH_BENCHMARK_OBJ := generated/benchmark.o

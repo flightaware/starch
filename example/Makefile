@@ -11,6 +11,8 @@ ifneq (,$(findstring arm,$(ARCH)))
   -include generated/makefile.arm
 else ifneq (,$(findstring x86_64,$(ARCH)))
   -include generated/makefile.x86_64
+else ifneq (,$(findstring aarch64,$(ARCH)))
+  -include generated/makefile.aarch64
 else
   -include generated/makefile.generic
 endif

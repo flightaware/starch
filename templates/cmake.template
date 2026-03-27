@@ -1,0 +1,54 @@
+# -*- cmake -*-
+
+### Copyright (c) 2025, FlightAware LLC.
+### All rights reserved.
+### See the LICENSE file for licensing terms.
+
+# starch generated cmake include file.
+# This is a generated file, do not edit.
+
+# This include file provides cmake macros for building starch-generated
+# code from a specific mix. There is a separate include file for each mix;
+# only one is expected to be included.
+
+# Two macros are provided:
+
+# add_starch_library(target ...):
+#   create a new library target named "target" that contains the starch
+#   generated code, and set appropriate include/compile settings on the
+#   target. Additional args (e.g. STATIC) are passed through to
+#   add_library()
+
+# add_starch_benchmark(target starchlib ...):
+#   add a new target named "target" which builds the benchmarking executable.
+#   starchlib should be the corresponding starch library added via
+#   "add_starch_library". Additional args are passed through to
+#   add_executable()
+
+<%
+   import os
+   def normpath(x): return os.path.relpath((x.path if hasattr(x,'path') else x), gen.runtime_dir)
+   def normpaths(l,gen=gen): return ' '.join(normpath(x) for x in l)
+   benchmark_c_file = normpath(gen.generated_benchmark_path)
+   dispatcher_c_file = normpath(gen.generated_dispatcher_path)
+   all_flavor_files = []
+%>
+
+% for flavor in mix.flavors:
+<%
+  flavor_c_file = normpath(gen.generated_flavor_path(flavor))
+  all_flavor_files.append(flavor_c_file)
+%>
+set_source_files_properties(${flavor_c_file} PROPERTIES COMPILE_OPTIONS "${';'.join(flavor.compile_flags)}")
+% endfor
+
+macro(add_starch_library target)
+  add_library(${"$"}{target} ${"$"}{ARGN} ${' '.join(all_flavor_files + [dispatcher_c_file])})
+  target_include_directories(${"$"}{target} PUBLIC "${os.path.dirname(normpath(gen.generated_include_path))}")
+  target_compile_definitions(${"$"}{target} PUBLIC "${mix.macro}")
+endmacro()
+
+macro(add_starch_benchmark target starchlib)
+  add_executable(${"$"}{target} ${"$"}{ARGN} ${benchmark_c_file})
+  target_link_libraries(${"$"}{target} ${"$"}{starchlib})
+endmacro()

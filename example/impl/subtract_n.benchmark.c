@@ -6,15 +6,18 @@ void STARCH_BENCHMARK(subtract_n) (void)
     const unsigned len = 65536;
     const unsigned n = 42;
 
-    if (!(in = STARCH_BENCHMARK_ALLOC(len, uint16_t)) || !(out = STARCH_BENCHMARK_ALLOC(len, uint16_t))) {
+    if (!(in = calloc(len, sizeof(uint16_t))) || !(out = calloc(len, sizeof(uint16_t)))) {
         goto done;
     }
+
+    for (unsigned i = 0; i < len; ++i)
+        in[i] = rand() % 65535;
 
     STARCH_BENCHMARK_RUN( subtract_n, in, len, n, out );
 
  done:
-    STARCH_BENCHMARK_FREE(in);
-    STARCH_BENCHMARK_FREE(out);
+    free(in);
+    free(out);
 }
 
 bool STARCH_BENCHMARK_VERIFY(subtract_n)(const uint16_t *in, unsigned len, uint16_t n, uint16_t *out)

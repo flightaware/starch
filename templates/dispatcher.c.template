@@ -1,4 +1,5 @@
-### Copyright (c) 2020, FlightAware LLC.
+### -*- c -*-
+### Copyright (c) 2020-2025, FlightAware LLC.
 ### All rights reserved.
 ### See the LICENSE file for licensing terms.
 
@@ -83,36 +84,20 @@ ${function.regentry_type} ${function.registry_symbol}[] = {
 % for mix in sorted(gen.mixes.values()):
   <%
     # gather all implementations for this mix, sort by wisdom
-    def rank_key(value, wisdom=mix.function_wisdom(function)):
-      impl, flavor = value
+    def rank_key(impl, wisdom=mix.function_wisdom(function)):
       try:
-        return wisdom.index(impl.wisdom_name(flavor))
+        return wisdom.index(impl.wisdom_name)
       except ValueError:
         return len(wisdom)
 
     mix_impls = []
     for flavor in mix.flavors:
-        if function.aligned and function.aligned_pair:
-            if flavor.alignment > 1:
-                # add aligned impls
-                for impl in function.impls:
-                    if impl.feature is None or impl.feature in flavor.features:
-                        mix_impls.append( (impl, flavor) )
-            # add unaligned impls
-            for impl in function.aligned_pair.impls:
-                if impl.feature is None or impl.feature in flavor.features:
-                    mix_impls.append( (impl, flavor) )
-        else:
-            # no alignment specialization
-            for impl in function.impls:
-                if impl.feature is None or impl.feature in flavor.features:
-                    mix_impls.append( (impl, flavor) )
-
+        mix_impls.extend([f for f in flavor.impls if f.function == function])
     mix_impls.sort(key=rank_key)
   %>
 #ifdef ${mix.macro}
-  % for rank, (impl, flavor) in enumerate(mix_impls):
-    { ${rank}, "${impl.wisdom_name(flavor)}", "${flavor.name}", ${impl.impl_symbol(flavor)}, ${flavor.test_function_expr} },
+  % for rank, impl in enumerate(mix_impls):
+    { ${rank}, "${impl.wisdom_name}", "${impl.flavor.name}", ${impl.impl_symbol}, ${impl.flavor.test_function_expr} },
   % endfor
 #endif /* ${mix.macro} */
 % endfor

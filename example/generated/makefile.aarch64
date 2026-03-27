@@ -1,7 +1,7 @@
 # -*- makefile -*-
 
 
-# starch makefile fragment for mix generic: Generic build, compiler defaults only
+# starch makefile fragment for mix aarch64: ARM, 64-bit
 # This is a generated file, do not edit.
 
 # This makefile is designed to be included in a surrounding makefile. The including makefile
@@ -20,9 +20,13 @@
 #  explicit build rules for each object file listed in $(STARCH_OBJS)
 
 MKDIR_P = mkdir -p
-STARCH_CFLAGS := -DSTARCH_MIX_GENERIC
+STARCH_CFLAGS := -DSTARCH_MIX_AARCH64
 
 
+
+generated/flavor.armv8a_asimd.o: generated/flavor.armv8a_asimd.c generated/starch.h impl/subtract_n.generic.c impl/subtract_n.neon.c
+	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)generated/flavor.armv8a_asimd.o)
+	$(STARCH_COMPILE) $(STARCH_CFLAGS) -march=armv8-a+simd generated/flavor.armv8a_asimd.c -o $(STARCH_OBJ_PATH)generated/flavor.armv8a_asimd.o
 
 generated/flavor.generic.o: generated/flavor.generic.c generated/starch.h impl/subtract_n.generic.c
 	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)generated/flavor.generic.o)
@@ -33,7 +37,7 @@ generated/dispatcher.o: generated/dispatcher.c generated/starch.h
 	@$(MKDIR_P) $(dir $(STARCH_OBJ_PATH)generated/dispatcher.o)
 	$(STARCH_COMPILE) $(STARCH_CFLAGS) generated/dispatcher.c -o $(STARCH_OBJ_PATH)generated/dispatcher.o
 
-STARCH_OBJS := generated/flavor.generic.o generated/dispatcher.o
+STARCH_OBJS := generated/flavor.armv8a_asimd.o generated/flavor.generic.o generated/dispatcher.o
 
 
 generated/benchmark.o: generated/benchmark.c generated/starch.h impl/subtract_n.benchmark.c
