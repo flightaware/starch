@@ -27,7 +27,7 @@ STARCH_CFLAGS := -D${mix.macro}
 <%
    import os
    def normpath(x): return os.path.relpath((x.path if hasattr(x,'path') else x), gen.runtime_dir)
-   def normpaths(l,gen=gen): return ' '.join(normpath(x) for x in l)
+   def normpaths(l,gen=gen): return ' '.join(normpath(x) for x in sorted(l))
 
    all_o_files = []
    all_c_impls = set()

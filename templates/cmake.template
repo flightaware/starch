@@ -28,7 +28,7 @@
 <%
    import os
    def normpath(x): return os.path.relpath((x.path if hasattr(x,'path') else x), gen.runtime_dir)
-   def normpaths(l,gen=gen): return ' '.join(normpath(x) for x in l)
+   def normpaths(l,gen=gen): return ' '.join(normpath(x) for x in sorted(l))
    benchmark_c_file = normpath(gen.generated_benchmark_path)
    dispatcher_c_file = normpath(gen.generated_dispatcher_path)
    all_flavor_files = []
